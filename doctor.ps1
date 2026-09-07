@@ -59,6 +59,11 @@ function Get-ResolvedPathOrNull {
     catch { return $null }
 }
 
+function Normalize-ComparablePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    return $Path.TrimEnd([char[]]"\/")
+}
+
 function Test-SamePath {
     param(
         [Parameter(Mandatory = $true)][string]$PathA,
@@ -68,7 +73,7 @@ function Test-SamePath {
     $a = Get-ResolvedPathOrNull -Path $PathA
     $b = Get-ResolvedPathOrNull -Path $PathB
     if ($null -eq $a -or $null -eq $b) { return $false }
-    return $a.TrimEnd('\', '/') -ieq $b.TrimEnd('\', '/')
+    return (Normalize-ComparablePath -Path $a) -ieq (Normalize-ComparablePath -Path $b)
 }
 
 function Test-SkillLink {
@@ -171,7 +176,7 @@ $userMemoryHome = [Environment]::GetEnvironmentVariable("AI_MEMORY_HOME", "User"
 if ([string]::IsNullOrWhiteSpace($userMemoryHome)) {
     Write-DoctorResult -Status "FAIL" -Message "사용자 환경변수 AI_MEMORY_HOME이 등록되지 않음"
 }
-elif (Test-SamePath -PathA $userMemoryHome -PathB $RepoRoot) {
+elseif (Test-SamePath -PathA $userMemoryHome -PathB $RepoRoot) {
     Write-DoctorResult -Status "OK" -Message "AI_MEMORY_HOME=$userMemoryHome"
 }
 else {
@@ -181,7 +186,7 @@ else {
 if ([string]::IsNullOrWhiteSpace($env:AI_MEMORY_HOME)) {
     Write-DoctorResult -Status "WARN" -Message "현재 PowerShell 세션에는 AI_MEMORY_HOME이 없습니다. 새 셸을 열거나 setup.ps1을 다시 실행하세요."
 }
-elif (Test-SamePath -PathA $env:AI_MEMORY_HOME -PathB $RepoRoot) {
+elseif (Test-SamePath -PathA $env:AI_MEMORY_HOME -PathB $RepoRoot) {
     Write-DoctorResult -Status "OK" -Message "현재 세션 AI_MEMORY_HOME 정상"
 }
 else {
