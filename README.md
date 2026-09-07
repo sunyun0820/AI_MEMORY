@@ -1,53 +1,30 @@
 # AI_MEMORY
 
-Codex, Cursor, Claude Code, Antigravity 등 여러 개발 에이전트가 **하나의 공용 장기 메모리, 전역 Skill, 전역 지침**을 공유하기 위한 저장소입니다.
+Codex, Cursor, Claude Code, Antigravity 등 여러 개발 에이전트가 **공용 장기 메모리, 전역 Skill, 전역 지침, 반복 작업 Tool**을 한 저장소에서 공유하기 위한 개인 Agent Runtime 저장소입니다.
 
-핵심 목표는 두 가지입니다.
+## 목표
 
-1. 과거 작업의 중요한 규칙, 실수, 장애 원인, 해결 패턴, 설계 제약을 다음 작업에서 자동으로 다시 활용합니다.
-2. 여러 PC와 여러 Agent에서 최대한 동일한 작업 방식을 `git clone + setup.ps1`로 재현합니다.
+1. 과거 작업의 중요한 규칙, 실수, 장애 원인, 해결 패턴, 설계 제약을 다음 작업에서 다시 활용합니다.
+2. 반복적이고 기계적인 작업은 검증된 Tool로 실행하여 작업 속도를 높이고 Agent의 불필요한 추론/토큰 사용을 줄입니다.
+3. 여러 PC와 여러 Agent에서 최대한 동일한 작업 환경을 `git clone + setup.ps1`로 재현합니다.
 
-## 핵심 동작
-
-```text
-사용자 요청
-   ↓
-비단순 분석/설계/개발 작업인가?
-   ↓ YES
-agent-memory Recall 자동 실행
-   ↓
-관련 Memory만 선택적으로 조회
-   ↓
-분석 / 설계 / 구현 / 디버깅 / 리뷰 수행
-   ↓
-작업 완료
-   ↓
-자동 저장하지 않음
-```
-
-Memory 저장/갱신은 사용자가 명시적으로 요청할 때만 수행합니다.
-
-예:
-
-```text
-"이거 기억해"
-"이번 내용 메모리에 남겨"
-"기존 메모리 업데이트해"
-"이 실수 학습해"
-```
-
-즉 운영 원칙은 다음과 같습니다.
-
-> **Recall = 자동 / Learn = 사용자 명시 호출**
-
-## 저장소 구조
+## 핵심 구조
 
 ```text
 AI_MEMORY/
 ├─ README.md
 ├─ INDEX.md
+├─ TOOL_INDEX.md
 ├─ MEMORY_POLICY.md
 ├─ setup.ps1
+│
+├─ instructions/
+│  └─ GLOBAL_AGENT_INSTRUCTIONS.md
+│
+├─ skills/
+│  ├─ README.md
+│  └─ agent-memory/
+│     └─ SKILL.md
 │
 ├─ memory/
 │  ├─ rules/
@@ -56,29 +33,163 @@ AI_MEMORY/
 │  ├─ projects/
 │  └─ archive/
 │
-├─ skills/
+├─ tools/
 │  ├─ README.md
-│  └─ agent-memory/
-│     └─ SKILL.md
-│
-├─ instructions/
-│  └─ GLOBAL_AGENT_INSTRUCTIONS.md
+│  ├─ common/
+│  ├─ filesystem/
+│  ├─ git/
+│  ├─ java/
+│  ├─ dotnet/
+│  ├─ database/
+│  ├─ build/
+│  └─ web/
 │
 ├─ templates/
-│  └─ MEMORY_TEMPLATE.md
+│  ├─ MEMORY_TEMPLATE.md
+│  └─ TOOL_TEMPLATE.md
 │
 └─ scripts/
    ├─ search-memory.ps1
-   └─ rebuild-index.ps1
+   ├─ rebuild-index.ps1
+   ├─ search-tools.ps1
+   └─ rebuild-tool-index.ps1
 ```
 
-### 역할 구분
+## 역할 구분
 
-- `memory/` : 에이전트가 과거 작업에서 **무엇을 배웠는지** 저장
-- `skills/` : 에이전트가 **어떻게 동작할지** 정의
-- `instructions/` : 각 Agent가 **언제 Skill을 자동 적용할지** 정의하는 전역 지침의 단일 원본
+```text
+instructions = Agent의 기본 행동 규칙
+skills       = Agent가 어떻게 판단하고 작업할지 정의
+memory       = 과거 작업에서 무엇을 배웠는지 저장
+tools        = 반복 작업을 실제 스크립트/프로그램으로 실행
+```
 
-## 최초 설치
+각 영역을 섞지 않습니다.
+
+- 업무 경험/오류 원인 → `memory/`
+- Agent Workflow → `skills/`
+- 모든 Agent에 공통 적용할 행동 → `instructions/`
+- 반복 실행 가능한 자동화 → `tools/`
+
+# Agent 기본 흐름
+
+```text
+사용자 요청
+   ↓
+비단순 분석/설계/개발 작업인가?
+   ↓ YES
+관련 Memory Recall
+   ↓
+필요한 Skill 적용
+   ↓
+반복/대량/기계적 작업이 있는가?
+   ↓ YES
+TOOL_INDEX에서 기존 Tool 검색
+   ↓
+적합한 Tool이 있으면 TOOL.md 확인 후 실행
+   ↓
+없으면 Agent가 직접 수행
+   ↓
+결과 판단
+   ↓
+사용자가 명시적으로 요청한 경우에만 Memory Learn
+```
+
+## Memory 원칙
+
+### Recall = 자동
+
+과거 프로젝트 경험이 현재 판단에 도움 될 가능성이 있는 비단순 엔지니어링 작업에서는 관련 Memory를 선택적으로 조회합니다.
+
+대표 대상:
+
+- 시스템/소스/문제 분석
+- 기능/API/아키텍처/DB 설계
+- 기술 의사결정과 영향 분석
+- 구현/디버깅/리팩터링/코드 리뷰
+- 마이그레이션
+- 빌드/배포
+- DB 작업
+- 보안 검토
+- 반복되는 장애/운영 작업
+
+전체 Memory를 매번 읽지 않습니다.
+
+### Learn = 사용자 명시 요청
+
+작업 완료 자체는 Memory 저장 권한이 아닙니다.
+
+예:
+
+```text
+"이거 기억해"
+"이번 해결 방법 메모리에 남겨"
+"기존 메모리 업데이트해"
+"이 실수 학습해"
+```
+
+처럼 사용자가 명시했을 때만 저장/갱신합니다.
+
+세부 기준은 [`MEMORY_POLICY.md`](./MEMORY_POLICY.md)를 따릅니다.
+
+# Tool 원칙
+
+반복적·대량·결정적·기계적인 작업에서는 AI가 동일 절차를 매번 다시 수행하기 전에 [`TOOL_INDEX.md`](./TOOL_INDEX.md)를 확인합니다.
+
+```text
+TOOL_INDEX.md
+   ↓
+적합한 Tool 후보 선택
+   ↓
+선택한 Tool의 TOOL.md만 읽기
+   ↓
+입력 및 safety 확인
+   ↓
+Tool 실행
+   ↓
+요약 결과만 Agent가 분석
+```
+
+전체 `tools/` 디렉터리를 컨텍스트에 넣지 않습니다.
+
+## Tool 구조
+
+```text
+tools/<category>/<tool-name>/
+├─ TOOL.md
+└─ <script-or-program>
+```
+
+Tool 규격과 등록 기준은 [`tools/README.md`](./tools/README.md)를 따릅니다.
+
+새 Tool은 [`templates/TOOL_TEMPLATE.md`](./templates/TOOL_TEMPLATE.md)를 기준으로 작성합니다.
+
+## Safety 등급
+
+Tool의 `safety`는 아래 네 값 중 하나입니다.
+
+- `read-only`: 조회만 수행
+- `write-local`: 로컬 파일 생성/수정
+- `destructive`: 삭제/reset/대량 변경 등 영향이 큰 로컬 작업
+- `external`: DB 쓰기, 배포, Git push, API 변경, 메일 등 외부 상태 변경
+
+Tool이 존재한다는 사실 자체는 `destructive` 또는 `external` 작업의 실행 권한을 의미하지 않습니다.
+
+## Tool 검색
+
+```powershell
+.\scripts\search-tools.ps1 "java", "class"
+```
+
+Tool 추가/수정 후 색인을 재생성합니다.
+
+```powershell
+.\scripts\rebuild-tool-index.ps1
+```
+
+`TOOL_INDEX.md`는 직접 관리하기보다 이 스크립트로 생성합니다.
+
+# 최초 설치
 
 ```powershell
 git clone https://github.com/sunyun0820/AI_MEMORY.git E:\AI_MEMORY
@@ -87,79 +198,61 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\setup.ps1
 ```
 
-저장소 위치는 `E:\AI_MEMORY`로 고정되지 않습니다. `setup.ps1`이 현재 Repository 위치를 자동으로 사용합니다.
+Repository 위치는 `E:\AI_MEMORY`로 고정되지 않습니다. `setup.ps1`이 현재 Repository 위치를 자동으로 사용합니다.
 
-## setup.ps1이 하는 일
+## setup.ps1 동작
 
-### 1. 공용 Memory 경로 등록
+### AI_MEMORY_HOME
 
-현재 Repository 경로를 사용자 환경변수로 등록합니다.
+현재 Repository 경로를 사용자 환경변수에 등록합니다.
 
 ```text
 AI_MEMORY_HOME=<현재 Repository 경로>
 ```
 
-이미 올바른 값이면 그대로 둡니다.
+### 설치된 Agent만 구성
 
-### 2. 설치된 Agent 감지
+`setup.ps1`은 실제 설치 흔적이 있는 Agent만 구성합니다.
 
-`setup.ps1`은 이 PC에 실제로 설치되어 있거나 사용 흔적이 확인되는 Agent만 구성합니다.
+예:
 
 ```text
-=== Agent Detection ===
 [OK]   Codex 발견
 [OK]   Cursor 발견
 [SKIP] Claude Code 설치 흔적 없음
 [SKIP] Antigravity 설치 흔적 없음
 ```
 
-`[SKIP]`된 Agent에 대해서는:
+설치되지 않은 Agent에 대해서는 Skill Junction, 전역 지침, Agent 설정 폴더를 새로 만들지 않습니다.
 
-- 전역 Skill Junction을 만들지 않습니다.
-- 전역 지침을 만들지 않습니다.
-- `.claude`, `.cursor`, `.gemini` 같은 Agent 설정 폴더도 새로 만들지 않습니다.
+주요 감지 기준:
 
-즉, 설치되지 않은 Agent는 **아무 변경 없이 그대로 건너뜁니다.**
+- Codex: `codex` 또는 `~/.codex/config.toml`
+- Cursor: `agent` 또는 Cursor 실행 파일
+- Claude Code: `claude` 또는 `~/.claude/settings.json`
+- Antigravity: `agy` 또는 Antigravity 전용 앱/설정 데이터
 
-단순히 Agent 루트 폴더가 존재한다는 이유만으로 설치된 것으로 판단하지 않습니다. 이전 버전의 AI_MEMORY setup이 만들어 놓은 폴더를 실제 설치로 오인하지 않도록, 실행 명령 또는 실제 설정/앱 데이터 같은 더 구체적인 흔적을 사용합니다.
+### 전역 Skill
 
-현재 주요 감지 기준은 다음과 같습니다.
-
-- Codex: `codex` 명령 또는 `~/.codex/config.toml`
-- Cursor: `agent` 명령 또는 Cursor 실행 파일
-- Claude Code: `claude` 명령 또는 `~/.claude/settings.json`
-- Antigravity: `agy` 명령 또는 Antigravity 전용 앱/설정 데이터
-
-Codex와 Cursor 중 하나라도 설치되어 있으면 둘이 공통으로 사용하는 `~/.agents/skills` 경로를 구성합니다.
-
-### 3. 전역 Skill 자동 연결
-
-`skills/*/SKILL.md`를 자동 탐색합니다.
-
-탐색된 Skill은 **설치된 Agent에만** Junction으로 연결합니다.
+`skills/*/SKILL.md`를 자동 탐색하고 설치된 Agent에만 연결합니다.
 
 ```text
-Codex + Cursor
-~\.agents\skills\<skill-name>
-
-Claude Code
-~\.claude\skills\<skill-name>
-
-Antigravity
-~\.gemini\config\skills\<skill-name>
+Codex + Cursor → ~/.agents/skills/<skill-name>
+Claude Code    → ~/.claude/skills/<skill-name>
+Antigravity    → ~/.gemini/config/skills/<skill-name>
 ```
 
-따라서 Skill 원본은 `AI_MEMORY\skills\` 한 곳에서만 관리합니다.
+Skill 원본은 이 Repository의 `skills/` 한 곳에서 관리합니다.
 
-### 4. 공용 전역 지침 배포
+### 전역 지침
 
-전역 지침의 유일한 원본은 다음 파일입니다.
+단일 원본:
 
 ```text
 instructions/GLOBAL_AGENT_INSTRUCTIONS.md
 ```
 
-`setup.ps1`이 **설치된 Agent에만** 반영합니다.
+설치된 Agent에만 반영합니다.
 
 ```text
 Codex       → ~/.codex/AGENTS.md
@@ -168,104 +261,11 @@ Claude Code → ~/.claude/CLAUDE.md
 Antigravity → ~/.gemini/GEMINI.md
 ```
 
-Codex, Claude Code, Antigravity의 기존 전역 지침은 삭제하지 않습니다. `AI_MEMORY_MANAGED_START/END` 블록만 추가하거나 갱신합니다.
+기존 사용자 지침은 삭제하지 않고 AI_MEMORY 관리 영역만 추가/갱신합니다.
 
-Cursor는 `ai-memory.mdc`라는 AI_MEMORY 전용 Rule 파일을 별도로 관리합니다. 동일 이름의 사용자 파일이 존재하고 AI_MEMORY 관리 마커가 없다면 덮어쓰지 않습니다.
+# 다른 PC에서 사용
 
-## 자동 Recall 대상
-
-과거 프로젝트 경험이 현재 판단에 도움 될 가능성이 있는 **비단순 엔지니어링 작업**은 기본적으로 Recall 대상입니다.
-
-예:
-
-- 시스템/소스/문제 분석
-- 기능 설계
-- API 설계
-- 아키텍처 설계
-- 데이터 모델/DB 설계
-- 기술 의사결정 및 영향 분석
-- 구현
-- 디버깅
-- 리팩터링
-- 코드 리뷰
-- 마이그레이션
-- 빌드/배포
-- 보안 검토
-- 반복되는 장애/운영 작업
-
-다음과 같은 단순 질문에서는 일반적으로 Recall을 생략합니다.
-
-```text
-Java int를 String으로 변환하는 법
-특정 git 명령어 하나 확인
-단순 문법 질문
-```
-
-사용자가 Recall을 먼저 호출할 필요는 없습니다.
-
-## Learn 사용 방식
-
-작업 완료 자체는 Memory 저장 권한이 아닙니다.
-
-사용자가 명시적으로 요청해야 합니다.
-
-```text
-"이거 기억해"
-"이번 해결 방법 저장해"
-"이 규칙 앞으로 기억해"
-"기존 메모리 업데이트해"
-```
-
-그때 `agent-memory`가 다음을 수행합니다.
-
-```text
-저장 가치 판단
-   ↓
-기존 Memory 검색
-   ↓
-중복 있음 → 기존 MD 갱신
-중복 없음 → 신규 MD 생성
-   ↓
-INDEX 재생성
-```
-
-## Memory 종류
-
-- `rule` : 반복적으로 따라야 하는 검증된 규칙
-- `lesson` : 재사용 가능한 문제 해결/설계 경험
-- `incident` : 실제 장애와 검증된 원인/해결
-- `project` : 특정 프로젝트에서만 유효한 구조/제약/지식
-
-세부 저장 정책은 [`MEMORY_POLICY.md`](./MEMORY_POLICY.md)를 따릅니다.
-
-## Memory 검색 원칙
-
-전체 Memory를 매번 읽지 않습니다.
-
-```text
-현재 작업 분석
-   ↓
-Global / Project Rule 확인
-   ↓
-INDEX 검색
-   ↓
-관련 Lesson / Incident 검색
-   ↓
-가장 관련성 높은 소수의 Memory만 읽기
-   ↓
-현재 코드/설정과 일치하는지 검증 후 사용
-```
-
-현재 소스 코드, 테스트, 설정, 공식 문서, 명시적인 프로젝트 지침이 오래된 Memory와 충돌하면 **현재 증거가 우선**입니다.
-
-## 다른 PC에서 동기화
-
-```powershell
-git pull
-.\setup.ps1
-```
-
-새 PC에서는:
+새 PC:
 
 ```powershell
 git clone https://github.com/sunyun0820/AI_MEMORY.git
@@ -273,36 +273,38 @@ cd AI_MEMORY
 .\setup.ps1
 ```
 
-으로 공용 Memory 경로와 **그 PC에 설치된 Agent의** 전역 Skills/전역 지침만 구성합니다.
-
-예를 들어 새 PC에 Codex만 설치되어 있다면 Codex 관련 구성만 적용되고 Cursor, Claude Code, Antigravity는 건너뜁니다.
-
-나중에 해당 PC에 Claude Code를 새로 설치했다면 다시:
+기존 PC 업데이트:
 
 ```powershell
+git pull
 .\setup.ps1
 ```
 
-만 실행하면 새로 감지된 Claude Code에도 공용 Skill과 전역 지침이 적용됩니다.
+나중에 새로운 Agent를 설치했다면 `setup.ps1`만 다시 실행하면 새로 감지된 Agent에 공용 Skill과 전역 지침이 추가됩니다.
 
-## Git 운영
+# Git 운영
 
-Memory나 Skill을 변경한 뒤에는 일반 Git 흐름을 사용합니다.
+Memory, Skill, Tool, 전역 지침은 Git을 통해 동기화하고 변경 이력을 관리합니다.
 
 ```powershell
 git add .
-git commit -m "에이전트 공용 메모리 업데이트"
+git commit -m "에이전트 공용 환경 업데이트"
 git push
 ```
 
-Git은 동기화뿐 아니라 잘못된 Memory/Skill 변경을 diff와 rollback으로 관리하기 위한 장치이기도 합니다.
+AI가 자동으로 Memory를 작성했다고 해서 Git push까지 자동 수행하는 것을 기본 동작으로 두지는 않습니다.
 
-## 현재 단계
+# 현재 단계
 
-현재는 의도적으로 단순하게 유지합니다.
+현재 구조는 의도적으로 단순하게 유지합니다.
 
 ```text
-Markdown + Git + Shared Memory + Shared Global Skills + Shared Global Instructions
+Markdown
++ Git
++ Shared Memory
++ Shared Global Skills
++ Shared Global Instructions
++ Shared Agent Tools
 ```
 
-Memory 규모가 커져 단순 검색이 비효율적이 되는 시점에 SQLite FTS 또는 Vector Search를 추가할 수 있습니다.
+Memory/Tool 규모가 충분히 커져 Markdown 색인과 텍스트 검색이 비효율적이 되는 시점에 SQLite FTS 또는 Vector Search 같은 검색 계층을 추가할 수 있습니다.
