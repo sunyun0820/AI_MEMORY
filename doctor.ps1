@@ -1,7 +1,6 @@
 # AI_MEMORY Doctor
-# - AI_MEMORY 설치/연결 상태를 진단합니다.
-# - 설치되지 않은 Agent는 실패가 아니라 SKIP으로 처리합니다.
-# - 영구 설정을 변경하지 않습니다.
+# Windows PowerShell 5.1 compatible and ASCII-only by design.
+# Read-only diagnostics except for a temporary write test file that is deleted immediately.
 
 $ErrorActionPreference = "Stop"
 
@@ -34,7 +33,7 @@ function Test-CommandExists {
 }
 
 function Test-AnyPath {
-    param([string[]]$Paths)
+    param([string[]]$Paths = @())
     foreach ($path in $Paths) {
         if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path $path)) { return $true }
     }
@@ -43,14 +42,18 @@ function Test-AnyPath {
 
 function Test-AgentInstalled {
     param(
-        [string[]]$Commands,
-        [string[]]$EvidencePaths
+        [string[]]$Commands = @(),
+        [string[]]$EvidencePaths = @()
     )
-
     foreach ($command in $Commands) {
-        if (Test-CommandExists -Name $command) { return $true }
+        if (Test-CommandExists $command) { return $true }
     }
-    return Test-AnyPath -Paths $EvidencePaths
+    return Test-AnyPath $EvidencePaths
+}
+
+function Normalize-ComparablePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    return $Path.TrimEnd([char[]]"\/")
 }
 
 function Get-ResolvedPathOrNull {
@@ -59,21 +62,15 @@ function Get-ResolvedPathOrNull {
     catch { return $null }
 }
 
-function Normalize-ComparablePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    return $Path.TrimEnd([char[]]"\/")
-}
-
 function Test-SamePath {
     param(
         [Parameter(Mandatory = $true)][string]$PathA,
         [Parameter(Mandatory = $true)][string]$PathB
     )
-
-    $a = Get-ResolvedPathOrNull -Path $PathA
-    $b = Get-ResolvedPathOrNull -Path $PathB
+    $a = Get-ResolvedPathOrNull $PathA
+    $b = Get-ResolvedPathOrNull $PathB
     if ($null -eq $a -or $null -eq $b) { return $false }
-    return (Normalize-ComparablePath -Path $a) -ieq (Normalize-ComparablePath -Path $b)
+    return (Normalize-ComparablePath $a) -ieq (Normalize-ComparablePath $b)
 }
 
 function Test-SkillLink {
@@ -84,24 +81,24 @@ function Test-SkillLink {
     )
 
     if (-not (Test-Path $LinkPath)) {
-        Write-DoctorResult -Status "FAIL" -Message "$AgentName Skill 연결 없음: $LinkPath"
+        Write-DoctorResult FAIL "$AgentName skill link missing: $LinkPath"
         return
     }
 
     $item = Get-Item $LinkPath -Force
     if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") {
-        Write-DoctorResult -Status "FAIL" -Message "$AgentName Skill 경로가 Link가 아님: $LinkPath"
+        Write-DoctorResult FAIL "$AgentName skill path is not a link: $LinkPath"
         return
     }
 
     foreach ($target in @($item.Target)) {
         if (Test-SamePath -PathA $target -PathB $TargetPath) {
-            Write-DoctorResult -Status "OK" -Message "$AgentName Skill 연결: $($item.Name)"
+            Write-DoctorResult OK "$AgentName skill linked: $($item.Name)"
             return
         }
     }
 
-    Write-DoctorResult -Status "FAIL" -Message "$AgentName Skill 대상 불일치: $LinkPath -> $($item.Target -join ', ')"
+    Write-DoctorResult FAIL "$AgentName skill target mismatch: $LinkPath"
 }
 
 function Test-ManagedInstruction {
@@ -111,22 +108,22 @@ function Test-ManagedInstruction {
     )
 
     if (-not (Test-Path $Path -PathType Leaf)) {
-        Write-DoctorResult -Status "FAIL" -Message "$AgentName 전역 지침 없음: $Path"
+        Write-DoctorResult FAIL "$AgentName global instruction missing: $Path"
         return
     }
 
     $content = Get-Content $Path -Raw -Encoding UTF8
     if ($content.Contains($ManagedStart) -and $content.Contains($ManagedEnd)) {
-        Write-DoctorResult -Status "OK" -Message "$AgentName 전역 지침 연결"
+        Write-DoctorResult OK "$AgentName global instruction managed by AI_MEMORY"
     }
     else {
-        Write-DoctorResult -Status "FAIL" -Message "$AgentName 전역 지침에 AI_MEMORY 관리 블록 없음: $Path"
+        Write-DoctorResult FAIL "$AgentName global instruction has no AI_MEMORY managed block: $Path"
     }
 }
 
 Write-Host ""
 Write-Host "=== AI_MEMORY Doctor ==="
-Write-Host "Repository : $RepoRoot"
+Write-Host "Repository: $RepoRoot"
 Write-Host ""
 
 Write-Host "=== Repository ==="
@@ -136,6 +133,7 @@ $requiredPaths = @(
     "TOOL_INDEX.md",
     "MEMORY_POLICY.md",
     "setup.ps1",
+    "doctor.ps1",
     "instructions\GLOBAL_AGENT_INSTRUCTIONS.md",
     "skills",
     "memory",
@@ -149,59 +147,58 @@ $requiredPaths = @(
 )
 
 foreach ($relative in $requiredPaths) {
-    $path = Join-Path $RepoRoot $relative
-    if (Test-Path $path) {
-        Write-DoctorResult -Status "OK" -Message "필수 항목: $relative"
+    if (Test-Path (Join-Path $RepoRoot $relative)) {
+        Write-DoctorResult OK "Required item: $relative"
     }
     else {
-        Write-DoctorResult -Status "FAIL" -Message "필수 항목 누락: $relative"
+        Write-DoctorResult FAIL "Missing required item: $relative"
     }
 }
 
 if (Test-Path (Join-Path $RepoRoot ".git") -PathType Container) {
-    Write-DoctorResult -Status "OK" -Message "Git Repository"
+    Write-DoctorResult OK "Git repository"
 }
 else {
-    Write-DoctorResult -Status "WARN" -Message ".git 폴더를 찾지 못했습니다. Git clone이 아닌 복사본일 수 있습니다."
+    Write-DoctorResult WARN ".git directory not found; this may be a copied repository."
 }
 
-if (Test-CommandExists -Name "git") {
-    Write-DoctorResult -Status "OK" -Message "git 명령 사용 가능"
+if (Test-CommandExists "git") {
+    Write-DoctorResult OK "git command available"
 }
 else {
-    Write-DoctorResult -Status "WARN" -Message "git 명령을 찾지 못했습니다. 동기화 기능은 사용할 수 없습니다."
+    Write-DoctorResult WARN "git command not found; synchronization will be unavailable."
 }
 
 $userMemoryHome = [Environment]::GetEnvironmentVariable("AI_MEMORY_HOME", "User")
 if ([string]::IsNullOrWhiteSpace($userMemoryHome)) {
-    Write-DoctorResult -Status "FAIL" -Message "사용자 환경변수 AI_MEMORY_HOME이 등록되지 않음"
+    Write-DoctorResult FAIL "User AI_MEMORY_HOME is not registered"
 }
 elseif (Test-SamePath -PathA $userMemoryHome -PathB $RepoRoot) {
-    Write-DoctorResult -Status "OK" -Message "AI_MEMORY_HOME=$userMemoryHome"
+    Write-DoctorResult OK "User AI_MEMORY_HOME=$userMemoryHome"
 }
 else {
-    Write-DoctorResult -Status "FAIL" -Message "AI_MEMORY_HOME이 현재 Repository와 다름: $userMemoryHome"
+    Write-DoctorResult FAIL "User AI_MEMORY_HOME points elsewhere: $userMemoryHome"
 }
 
 if ([string]::IsNullOrWhiteSpace($env:AI_MEMORY_HOME)) {
-    Write-DoctorResult -Status "WARN" -Message "현재 PowerShell 세션에는 AI_MEMORY_HOME이 없습니다. 새 셸을 열거나 setup.ps1을 다시 실행하세요."
+    Write-DoctorResult WARN "Current shell has no AI_MEMORY_HOME; open a new shell or rerun setup.ps1."
 }
 elseif (Test-SamePath -PathA $env:AI_MEMORY_HOME -PathB $RepoRoot) {
-    Write-DoctorResult -Status "OK" -Message "현재 세션 AI_MEMORY_HOME 정상"
+    Write-DoctorResult OK "Current shell AI_MEMORY_HOME is correct"
 }
 else {
-    Write-DoctorResult -Status "WARN" -Message "현재 세션 AI_MEMORY_HOME이 오래된 값일 수 있습니다: $env:AI_MEMORY_HOME"
+    Write-DoctorResult WARN "Current shell AI_MEMORY_HOME differs: $env:AI_MEMORY_HOME"
 }
 
 $tempPath = Join-Path $RepoRoot (".doctor-write-test-" + [guid]::NewGuid().ToString("N") + ".tmp")
 try {
-    [IO.File]::WriteAllText($tempPath, "AI_MEMORY doctor write test", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($tempPath, "AI_MEMORY doctor write test", (New-Object Text.UTF8Encoding($false)))
     Remove-Item $tempPath -Force
-    Write-DoctorResult -Status "OK" -Message "Repository 쓰기 권한"
+    Write-DoctorResult OK "Repository write permission"
 }
 catch {
     if (Test-Path $tempPath) { Remove-Item $tempPath -Force -ErrorAction SilentlyContinue }
-    Write-DoctorResult -Status "FAIL" -Message "Repository 쓰기 권한 확인 실패: $($_.Exception.Message)"
+    Write-DoctorResult FAIL "Repository write test failed: $($_.Exception.Message)"
 }
 
 Write-Host ""
@@ -214,21 +211,21 @@ $skillDirectories = @(
 )
 
 if ($skillDirectories.Count -gt 0) {
-    Write-DoctorResult -Status "OK" -Message "전역 Skill 발견: $($skillDirectories.Count)개"
+    Write-DoctorResult OK "Global skills found: $($skillDirectories.Count)"
 }
 else {
-    Write-DoctorResult -Status "FAIL" -Message "SKILL.md를 가진 전역 Skill이 없음"
+    Write-DoctorResult FAIL "No global skill with SKILL.md found"
 }
 
 if (Test-Path (Join-Path $skillsRoot "agent-memory\SKILL.md") -PathType Leaf) {
-    Write-DoctorResult -Status "OK" -Message "agent-memory Skill"
+    Write-DoctorResult OK "agent-memory skill"
 }
 else {
-    Write-DoctorResult -Status "FAIL" -Message "agent-memory Skill 누락"
+    Write-DoctorResult FAIL "agent-memory skill missing"
 }
 
 $toolDocs = @(Get-ChildItem -Path (Join-Path $RepoRoot "tools") -Filter "TOOL.md" -File -Recurse -ErrorAction SilentlyContinue)
-Write-DoctorResult -Status "OK" -Message "등록된 Tool: $($toolDocs.Count)개"
+Write-DoctorResult OK "Registered tools: $($toolDocs.Count)"
 
 Write-Host ""
 Write-Host "=== Agent Detection ==="
@@ -260,15 +257,14 @@ $claudeInstalled = Test-AgentInstalled -Commands @("claude") -EvidencePaths $cla
 $antigravityInstalled = Test-AgentInstalled -Commands @("agy") -EvidencePaths $antigravityEvidence
 
 $agentStatus = [ordered]@{
-    "Codex"       = $codexInstalled
-    "Cursor"      = $cursorInstalled
+    "Codex" = $codexInstalled
+    "Cursor" = $cursorInstalled
     "Claude Code" = $claudeInstalled
     "Antigravity" = $antigravityInstalled
 }
-
 foreach ($agent in $agentStatus.GetEnumerator()) {
-    if ($agent.Value) { Write-DoctorResult -Status "OK" -Message "$($agent.Key) 발견" }
-    else { Write-DoctorResult -Status "SKIP" -Message "$($agent.Key) 설치 흔적 없음" }
+    if ($agent.Value) { Write-DoctorResult OK "$($agent.Key) detected" }
+    else { Write-DoctorResult SKIP "$($agent.Key) not detected" }
 }
 
 Write-Host ""
@@ -278,41 +274,35 @@ if ($codexInstalled -or $cursorInstalled) {
         Test-SkillLink -AgentName "Codex + Cursor" -LinkPath (Join-Path $HOME ".agents\skills\$($skill.Name)") -TargetPath $skill.FullName
     }
 }
-else {
-    Write-DoctorResult -Status "SKIP" -Message "Codex + Cursor Skill 검사"
-}
+else { Write-DoctorResult SKIP "Codex + Cursor skill checks" }
 
 if ($claudeInstalled) {
     foreach ($skill in $skillDirectories) {
         Test-SkillLink -AgentName "Claude Code" -LinkPath (Join-Path $claudeHome "skills\$($skill.Name)") -TargetPath $skill.FullName
     }
 }
-else {
-    Write-DoctorResult -Status "SKIP" -Message "Claude Code Skill 검사"
-}
+else { Write-DoctorResult SKIP "Claude Code skill checks" }
 
 if ($antigravityInstalled) {
     foreach ($skill in $skillDirectories) {
         Test-SkillLink -AgentName "Antigravity" -LinkPath (Join-Path $antigravityConfigHome "skills\$($skill.Name)") -TargetPath $skill.FullName
     }
 }
-else {
-    Write-DoctorResult -Status "SKIP" -Message "Antigravity Skill 검사"
-}
+else { Write-DoctorResult SKIP "Antigravity skill checks" }
 
 Write-Host ""
 Write-Host "=== Global Instructions ==="
 if ($codexInstalled) { Test-ManagedInstruction -AgentName "Codex" -Path (Join-Path $codexHome "AGENTS.md") }
-else { Write-DoctorResult -Status "SKIP" -Message "Codex 전역 지침 검사" }
+else { Write-DoctorResult SKIP "Codex global instruction" }
 
 if ($cursorInstalled) { Test-ManagedInstruction -AgentName "Cursor" -Path (Join-Path $cursorHome "rules\ai-memory.mdc") }
-else { Write-DoctorResult -Status "SKIP" -Message "Cursor 전역 지침 검사" }
+else { Write-DoctorResult SKIP "Cursor global instruction" }
 
 if ($claudeInstalled) { Test-ManagedInstruction -AgentName "Claude Code" -Path (Join-Path $claudeHome "CLAUDE.md") }
-else { Write-DoctorResult -Status "SKIP" -Message "Claude Code 전역 지침 검사" }
+else { Write-DoctorResult SKIP "Claude Code global instruction" }
 
 if ($antigravityInstalled) { Test-ManagedInstruction -AgentName "Antigravity" -Path (Join-Path $geminiHome "GEMINI.md") }
-else { Write-DoctorResult -Status "SKIP" -Message "Antigravity 전역 지침 검사" }
+else { Write-DoctorResult SKIP "Antigravity global instruction" }
 
 Write-Host ""
 Write-Host "=== Doctor Summary ==="
@@ -324,10 +314,9 @@ Write-Host ""
 
 if ($script:FailCount -gt 0) {
     Write-Host "RESULT=FAIL" -ForegroundColor Red
-    Write-Host "setup.ps1을 다시 실행한 뒤 doctor.ps1로 재검사하세요."
+    Write-Host "Run setup.ps1 again, then rerun doctor.ps1."
     exit 1
 }
-
 if ($script:WarnCount -gt 0) {
     Write-Host "RESULT=PASS_WITH_WARNINGS"
     exit 0
