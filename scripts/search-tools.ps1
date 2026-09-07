@@ -1,7 +1,6 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string[]]$Query,
-
     [int]$Top = 10
 )
 
@@ -31,15 +30,17 @@ function Get-ScalarMetadata {
 }
 
 if (-not (Test-Path $ToolsRoot -PathType Container)) {
-    Write-Error "tools 폴더를 찾을 수 없습니다: $ToolsRoot"
+    Write-Error "Tools directory not found: $ToolsRoot"
     exit 3
 }
 
 $terms = @($Query | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 if ($terms.Count -eq 0) {
-    Write-Error "검색어를 하나 이상 입력하세요."
+    Write-Error "At least one search term is required."
     exit 2
 }
+
+if ($Top -lt 1) { $Top = 1 }
 
 $results = @()
 $toolDocs = @(Get-ChildItem -Path $ToolsRoot -Filter "TOOL.md" -File -Recurse)
@@ -50,27 +51,33 @@ foreach ($toolDoc in $toolDocs) {
     $score = 0
 
     foreach ($term in $terms) {
-        $matches = [regex]::Matches($raw, [regex]::Escape($term), [System.Text.RegularExpressions.RegexOptions]::IgnoreCase).Count
-        if ($matches -gt 0) {
-            $score += [Math]::Min($matches, 5)
-        }
+        $matches = [regex]::Matches(
+            $raw,
+            [regex]::Escape($term),
+            [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+        ).Count
+        if ($matches -gt 0) { $score += [Math]::Min($matches, 5) }
     }
 
     if ($score -le 0) { continue }
 
-    $relativePath = $toolDoc.FullName.Substring($RepoRoot.Length).TrimStart([char[]]"\/") -replace '\\', '/'
+    $relativePath = $toolDoc.FullName.Substring($RepoRoot.Length).TrimStart([char[]]"\/").Replace("\", "/")
 
     $results += [PSCustomObject]@{
-        Score       = $score
-        Name        = Get-ScalarMetadata -Lines $lines -Key "name"
-        Category    = Get-ScalarMetadata -Lines $lines -Key "category"
-        Safety      = Get-ScalarMetadata -Lines $lines -Key "safety"
+        Score = $score
+        Name = Get-ScalarMetadata -Lines $lines -Key "name"
+        Category = Get-ScalarMetadata -Lines $lines -Key "category"
+        Safety = Get-ScalarMetadata -Lines $lines -Key "safety"
         Description = Get-ScalarMetadata -Lines $lines -Key "description"
-        Path        = $relativePath
+        Path = $relativePath
     }
 }
 
-$results = @($results | Sort-Object @{ Expression = "Score"; Descending = $true }, Category, Name | Select-Object -First $Top)
+$results = @(
+    $results |
+        Sort-Object @{ Expression = "Score"; Descending = $true }, Category, Name |
+        Select-Object -First $Top
+)
 
 if ($results.Count -eq 0) {
     Write-Host "STATUS=NO_MATCH"
