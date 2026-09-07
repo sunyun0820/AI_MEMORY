@@ -5,14 +5,21 @@ param(
     [int]$MaxFiles = 20
 )
 
-if ([string]::IsNullOrWhiteSpace($Root)) { $Root = "E:\AI_MEMORY" }
+# 환경변수가 없으면 이 스크립트의 상위 폴더를 저장소 루트로 사용합니다.
+if ([string]::IsNullOrWhiteSpace($Root)) {
+    $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+}
+
 if (!(Test-Path $Root)) { throw "AI memory root not found: $Root" }
+
+$memoryRoot = Join-Path $Root 'memory'
+if (!(Test-Path $memoryRoot)) { throw "Memory directory not found: $memoryRoot" }
 
 $patterns = $Query | Where-Object { $_ -and $_.Trim() } | ForEach-Object { [regex]::Escape($_) }
 if ($patterns.Count -eq 0) { throw "At least one query term is required." }
 $regex = ($patterns -join '|')
 
-Get-ChildItem -Path (Join-Path $Root 'memory') -Recurse -File -Filter '*.md' |
+Get-ChildItem -Path $memoryRoot -Recurse -File -Filter '*.md' |
     Select-String -Pattern $regex -CaseSensitive:$false |
     Group-Object Path |
     Sort-Object Count -Descending |
