@@ -2,11 +2,17 @@ param(
     [string]$Root = $env:AI_MEMORY_HOME
 )
 
-if ([string]::IsNullOrWhiteSpace($Root)) { $Root = "E:\AI_MEMORY" }
+# 환경변수가 없으면 이 스크립트의 상위 폴더를 저장소 루트로 사용합니다.
+if ([string]::IsNullOrWhiteSpace($Root)) {
+    $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+}
+
 if (!(Test-Path $Root)) { throw "AI memory root not found: $Root" }
 
 $memoryRoot = Join-Path $Root 'memory'
 $indexPath = Join-Path $Root 'INDEX.md'
+
+if (!(Test-Path $memoryRoot)) { throw "Memory directory not found: $memoryRoot" }
 
 function Get-MetaValue([string]$text, [string]$key) {
     $m = [regex]::Match($text, "(?m)^$([regex]::Escape($key)):\s*(.+)$")
