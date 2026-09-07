@@ -58,7 +58,7 @@ foreach ($toolDoc in $toolDocs) {
 
     if ($score -le 0) { continue }
 
-    $relativePath = $toolDoc.FullName.Substring($RepoRoot.Length).TrimStart('\', '/') -replace '\\', '/'
+    $relativePath = $toolDoc.FullName.Substring($RepoRoot.Length).TrimStart([char[]]"\/") -replace '\\', '/'
 
     $results += [PSCustomObject]@{
         Score       = $score
@@ -70,7 +70,7 @@ foreach ($toolDoc in $toolDocs) {
     }
 }
 
-$results = @($results | Sort-Object @{Expression = "Score"; Descending = $true}, Category, Name | Select-Object -First $Top)
+$results = @($results | Sort-Object @{ Expression = "Score"; Descending = $true }, Category, Name | Select-Object -First $Top)
 
 if ($results.Count -eq 0) {
     Write-Host "STATUS=NO_MATCH"
