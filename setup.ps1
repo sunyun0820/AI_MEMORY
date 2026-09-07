@@ -22,7 +22,6 @@ Write-Host "=== AI_MEMORY Setup ==="
 Write-Host "Repository : $RepoRoot"
 Write-Host ""
 
-# 1) 저장소 기본 구조 확인
 if (-not (Test-Path $SkillsRoot -PathType Container)) {
     Write-Error "필수 폴더를 찾을 수 없습니다: $SkillsRoot"
     exit 1
@@ -33,7 +32,6 @@ if (-not (Test-Path $GlobalInstructionSource -PathType Leaf)) {
     exit 1
 }
 
-# 2) AI_MEMORY_HOME 등록/갱신
 $currentHome = [Environment]::GetEnvironmentVariable("AI_MEMORY_HOME", "User")
 
 if ($currentHome -eq $RepoRoot) {
@@ -57,7 +55,6 @@ $env:AI_MEMORY_HOME = $RepoRoot
 
 function Get-ResolvedPathOrNull {
     param([Parameter(Mandatory = $true)][string]$Path)
-
     try { return (Resolve-Path $Path -ErrorAction Stop).Path }
     catch { return $null }
 }
@@ -70,7 +67,6 @@ function Test-SamePath {
 
     $resolvedA = Get-ResolvedPathOrNull -Path $PathA
     $resolvedB = Get-ResolvedPathOrNull -Path $PathB
-
     if ($null -eq $resolvedA -or $null -eq $resolvedB) { return $false }
     return $resolvedA.TrimEnd('\') -ieq $resolvedB.TrimEnd('\')
 }
@@ -82,15 +78,11 @@ function Test-AgentInstalled {
     )
 
     foreach ($command in $Commands) {
-        if (Get-Command $command -ErrorAction SilentlyContinue) {
-            return $true
-        }
+        if (Get-Command $command -ErrorAction SilentlyContinue) { return $true }
     }
 
     foreach ($path in $EvidencePaths) {
-        if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path $path)) {
-            return $true
-        }
+        if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path $path)) { return $true }
     }
 
     return $false
@@ -169,7 +161,6 @@ function Set-ManagedInstructionBlock {
 
     $block = "$ManagedStart`r`n$Content`r`n$ManagedEnd"
     $existing = if (Test-Path $Path) { Get-Content $Path -Raw -Encoding UTF8 } else { "" }
-
     $startIndex = $existing.IndexOf($ManagedStart)
     $endIndex = $existing.IndexOf($ManagedEnd)
 
@@ -232,30 +223,35 @@ $ManagedEnd
     Write-Host "     $Path"
 }
 
-# 3) 설치된 Agent 감지
+# 설치된 Agent 감지
+# 이전 AI_MEMORY setup이 만들 수 있었던 단순 루트 폴더 자체는 설치 근거로 사용하지 않습니다.
 $codexHome = if (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
 $claudeHome = if (-not [string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR)) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME ".claude" }
 $cursorHome = Join-Path $HOME ".cursor"
 $geminiHome = Join-Path $HOME ".gemini"
 $antigravityConfigHome = Join-Path $geminiHome "config"
 
-$cursorAppPaths = @($cursorHome)
-$antigravityEvidence = @($antigravityConfigHome, (Join-Path $geminiHome "antigravity"))
+$codexEvidence = @((Join-Path $codexHome "config.toml"))
+$claudeEvidence = @((Join-Path $claudeHome "settings.json"))
+$cursorEvidence = @()
+$antigravityEvidence = @((Join-Path $geminiHome "antigravity"), (Join-Path $geminiHome "antigravity-cli\settings.json"))
 
 if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-    $cursorAppPaths += (Join-Path $env:LOCALAPPDATA "Programs\cursor\Cursor.exe")
+    $cursorEvidence += (Join-Path $env:LOCALAPPDATA "Programs\cursor\Cursor.exe")
+    $antigravityEvidence += (Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe")
     $antigravityEvidence += (Join-Path $env:LOCALAPPDATA "Programs\Antigravity\Antigravity.exe")
 }
 
 if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
-    $cursorAppPaths += (Join-Path $env:ProgramFiles "Cursor\Cursor.exe")
+    $cursorEvidence += (Join-Path $env:ProgramFiles "Cursor\Cursor.exe")
+    $antigravityEvidence += (Join-Path $env:ProgramFiles "Google\antigravity-cli\agy.exe")
     $antigravityEvidence += (Join-Path $env:ProgramFiles "Antigravity\Antigravity.exe")
 }
 
-$codexInstalled = Test-AgentInstalled -Commands @("codex") -EvidencePaths @($codexHome)
-$cursorInstalled = Test-AgentInstalled -Commands @("cursor") -EvidencePaths $cursorAppPaths
-$claudeInstalled = Test-AgentInstalled -Commands @("claude") -EvidencePaths @($claudeHome)
-$antigravityInstalled = Test-AgentInstalled -Commands @("antigravity") -EvidencePaths $antigravityEvidence
+$codexInstalled = Test-AgentInstalled -Commands @("codex") -EvidencePaths $codexEvidence
+$cursorInstalled = Test-AgentInstalled -Commands @("agent") -EvidencePaths $cursorEvidence
+$claudeInstalled = Test-AgentInstalled -Commands @("claude") -EvidencePaths $claudeEvidence
+$antigravityInstalled = Test-AgentInstalled -Commands @("agy") -EvidencePaths $antigravityEvidence
 
 Write-Host ""
 Write-Host "=== Agent Detection ==="
@@ -268,15 +264,10 @@ $agentStatus = [ordered]@{
 }
 
 foreach ($agent in $agentStatus.GetEnumerator()) {
-    if ($agent.Value) {
-        Write-Host "[OK]   $($agent.Key) 발견"
-    }
-    else {
-        Write-Host "[SKIP] $($agent.Key) 설치 흔적 없음"
-    }
+    if ($agent.Value) { Write-Host "[OK]   $($agent.Key) 발견" }
+    else { Write-Host "[SKIP] $($agent.Key) 설치 흔적 없음" }
 }
 
-# 4) 전역 스킬 자동 탐색
 $skillDirectories = @(
     Get-ChildItem -Path $SkillsRoot -Directory |
         Where-Object { Test-Path (Join-Path $_.FullName "SKILL.md") } |
@@ -294,28 +285,23 @@ else {
     foreach ($skill in $skillDirectories) { Write-Host " - $($skill.Name)" }
 }
 
-# Codex와 Cursor는 ~/.agents/skills 를 공용으로 사용합니다.
 $agentSkillRoots = [ordered]@{}
 
 if ($codexInstalled -or $cursorInstalled) {
     $agentSkillRoots["Codex + Cursor"] = Join-Path $HOME ".agents\skills"
 }
-
 if ($claudeInstalled) {
     $agentSkillRoots["Claude Code"] = Join-Path $claudeHome "skills"
 }
-
 if ($antigravityInstalled) {
     $agentSkillRoots["Antigravity"] = Join-Path $antigravityConfigHome "skills"
 }
 
-# 이전 초기 setup이 만든 agent-memory 전용 경로는 해당 Agent가 현재 설치된 경우에만 정리합니다.
 $agentMemorySource = Join-Path $SkillsRoot "agent-memory"
 if (Test-Path $agentMemorySource) {
     if ($codexInstalled) {
         Remove-LegacyJunctionIfOwned -Path (Join-Path $codexHome "skills\agent-memory") -ExpectedTarget $agentMemorySource
     }
-
     if ($cursorInstalled) {
         Remove-LegacyJunctionIfOwned -Path (Join-Path $cursorHome "skills\agent-memory") -ExpectedTarget $agentMemorySource
     }
@@ -335,38 +321,25 @@ elseif ($agentSkillRoots.Count -eq 0) {
     Write-Host "[SKIP] 구성할 Agent가 없어 Skill Junction 생성을 건너뜁니다."
 }
 
-# 5) 단일 원본 전역 지침을 설치된 Agent에만 배포
 Write-Host ""
 Write-Host "=== Global Instructions ==="
 $globalInstruction = (Get-Content $GlobalInstructionSource -Raw -Encoding UTF8).Trim()
 
 if ($codexInstalled) {
     Set-ManagedInstructionBlock -AgentName "Codex" -Path (Join-Path $codexHome "AGENTS.md") -Content $globalInstruction
-}
-else {
-    Write-Host "[SKIP] Codex 전역 지침"
-}
+} else { Write-Host "[SKIP] Codex 전역 지침" }
 
 if ($cursorInstalled) {
     Set-CursorManagedRule -Path (Join-Path $cursorHome "rules\ai-memory.mdc") -Content $globalInstruction
-}
-else {
-    Write-Host "[SKIP] Cursor 전역 지침"
-}
+} else { Write-Host "[SKIP] Cursor 전역 지침" }
 
 if ($claudeInstalled) {
     Set-ManagedInstructionBlock -AgentName "Claude Code" -Path (Join-Path $claudeHome "CLAUDE.md") -Content $globalInstruction
-}
-else {
-    Write-Host "[SKIP] Claude Code 전역 지침"
-}
+} else { Write-Host "[SKIP] Claude Code 전역 지침" }
 
 if ($antigravityInstalled) {
     Set-ManagedInstructionBlock -AgentName "Antigravity" -Path (Join-Path $geminiHome "GEMINI.md") -Content $globalInstruction
-}
-else {
-    Write-Host "[SKIP] Antigravity 전역 지침"
-}
+} else { Write-Host "[SKIP] Antigravity 전역 지침" }
 
 $installedAgentCount = @($agentStatus.GetEnumerator() | Where-Object { $_.Value }).Count
 
