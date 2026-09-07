@@ -30,6 +30,16 @@ Use `agent-memory` in **Learn** mode only when the user explicitly asks to prese
 
 When learning is requested, deduplicate and follow `MEMORY_POLICY.md` before writing.
 
+## Tool reuse
+
+For repetitive, bulk, deterministic, or mechanical engineering work, check `AI_MEMORY_HOME/TOOL_INDEX.md` before reproducing the work manually when the shared repository is available.
+
+If a suitable verified Tool exists and is materially more efficient, prefer it. Read only the selected Tool's `TOOL.md`; do not load the entire `tools/` directory.
+
+A Tool's existence is not permission to perform a high-impact action. Respect its `safety` metadata. For `destructive` or `external` Tools, verify that the current user request authorizes the action and check the impact before execution.
+
+Prefer concise structured Tool output over loading large raw results into context.
+
 ## Precedence
 
-Current source code, configuration, tests, official documentation, and explicit user/project instructions take precedence over stale or conflicting memory.
+Current source code, configuration, tests, official documentation, and explicit user/project instructions take precedence over stale or conflicting memory or Tool documentation.
