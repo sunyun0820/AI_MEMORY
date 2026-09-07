@@ -1,108 +1,194 @@
 ---
 name: agent-memory
-description: Shared engineering memory workflow for coding agents. Use before non-trivial coding, debugging, build, deployment, migration, database, architecture, security, or repeated engineering work to retrieve relevant project rules, lessons, and incidents; use again after completion when a reusable lesson, agent mistake, root cause, project invariant, or repeated pattern should be stored or updated.
+description: Shared engineering memory for coding agents. Automatically use Recall mode before non-trivial analysis, design, architecture, coding, debugging, review, refactoring, migration, build/deployment, database, security, or existing-codebase work when past rules, project knowledge, lessons, incidents, or prior mistakes may help. Use Learn/write mode only when the user explicitly asks to remember, save, learn, update memory, 기록해, 기억해, 메모리에 남겨, 저장해, 업데이트해, or otherwise requests persistence.
 ---
 
 # Agent Memory
 
-Use the shared memory repository as selective long-term engineering memory.
+Use the shared `AI_MEMORY` repository as selective long-term engineering memory.
 
-## Memory home
+This skill has two distinct modes:
 
-Resolve the repository in this order:
+- **Recall**: automatic when relevant before substantial engineering analysis, design, or execution.
+- **Learn**: manual only; requires an explicit user request to persist or update knowledge.
+
+Never treat task completion by itself as permission to write memory.
+
+## Resolve memory home
+
+Resolve the memory repository in this order:
 
 1. Environment variable `AI_MEMORY_HOME`.
-2. If unavailable on Windows, `E:\AI_MEMORY`.
-3. If the path does not exist, do not invent memory. Continue the task and state that shared memory was unavailable only if it materially affects the result.
+2. If unavailable, infer the repository only when the installed skill link clearly resolves back to the AI_MEMORY repository.
+3. If the repository cannot be found, continue the user's task without inventing memory.
 
-Read `MEMORY_POLICY.md` before writing or promoting memory.
+Do not assume a fixed drive such as `E:\AI_MEMORY`.
 
-## Mode A — Recall before work
+Before any write, update, promotion, or archival operation, read `MEMORY_POLICY.md`.
 
-Use this for non-trivial engineering work.
+# Mode A — Recall
 
-1. Read `memory/rules/global.md`.
-2. Identify the current project/repository name and check whether `memory/projects/<project>/` exists.
-3. Extract 3–8 discriminative keywords from the task: technology, error text, module, component, operation, and failure class.
-4. Search `INDEX.md` first, then recursively search memory metadata/headings/content if needed.
-5. Load only the most relevant memories, normally 3–7 files maximum.
-6. Prioritize:
-   - active global rules
-   - active current-project rules/knowledge
-   - matching lessons
-   - matching incidents
-7. Apply a memory only after checking that its assumptions still fit the current code/configuration.
-8. Never load the entire memory repository merely for context.
+## When to use
 
-If `rg` is available, prefer it for search. Otherwise use the shell's native text search.
+Automatically use Recall before substantial work when prior engineering context could materially improve correctness, safety, consistency, or efficiency.
 
-## Mode B — Learn after work
+Typical triggers include:
 
-After the task is completed or a root cause is established, decide whether the result deserves long-term memory.
+- analyzing an existing system, module, source tree, failure, or technical problem;
+- designing a feature, API, architecture, data model, migration, integration, deployment, or implementation approach;
+- making an architecture or technical trade-off decision;
+- modifying an existing codebase;
+- debugging a bug, exception, build failure, deployment failure, data issue, or performance problem;
+- code review, refactoring, or impact analysis;
+- database/schema/query work;
+- security-sensitive analysis or implementation;
+- repeated or similar engineering work;
+- work involving a known project/module/component where project-specific memory may exist.
 
-### Store when
+Normally skip Recall for trivial operations such as simple syntax questions, tiny conversions, isolated command lookups, or generic factual questions where project memory is unlikely to matter.
 
-- a non-obvious root cause was verified;
-- the agent made a meaningful wrong assumption or unsafe/unnecessary modification;
-- a reusable debugging/build/deployment/database sequence was discovered;
-- an important project invariant, boundary, or prohibition was discovered;
-- the same failure/pattern is likely to recur;
-- an existing memory was proven incomplete or incorrect.
+The user does not need to ask for Recall explicitly.
 
-### Do not store when
+## Recall procedure
 
-- it was a trivial successful task;
-- the content is generic syntax/reference knowledge;
-- the information is temporary session state;
-- the conclusion is unverified speculation;
-- it contains secrets, credentials, tokens, private keys, or personal authentication information;
-- it would mostly duplicate logs or conversation transcripts.
+1. Identify the current repository/project, technology, module/component, requested analysis/design objective, operation, error text, and failure class where applicable.
+2. Read `memory/rules/global.md` if it exists.
+3. Check whether relevant project-scoped memory exists under `memory/projects/<project>/`.
+4. Extract a small set of discriminative search terms from the task.
+5. Search `INDEX.md` first.
+6. If needed, search memory metadata, headings, and content using `scripts/search-memory.ps1`, `rg`, or an equivalent native text search.
+7. Load only the most relevant memory files, normally no more than 3–7.
+8. Prioritize in this order:
+   - active global rules;
+   - active current-project knowledge/rules;
+   - matching lessons;
+   - matching incidents.
+9. Validate each retrieved memory against the current source/configuration before relying on it.
+10. Apply useful memory silently unless mentioning it materially helps explain a decision.
 
-## Deduplicate before writing
+## Recall constraints
 
-1. Search by error text, component/module, root cause, technology, and reusable-rule wording.
-2. If an existing memory describes substantially the same pattern, update it instead of creating a new file.
-3. On update, increment `occurrences`, refresh `last_seen` and `updated`, and add only genuinely new evidence or a better solution.
+- Never load the whole repository merely "for context".
+- Do not treat memory as authoritative when current code, tests, configuration, official documentation, or explicit user instructions contradict it.
+- Do not modify memory during Recall.
+- Do not create a memory merely because Recall found nothing.
+- Do not block the user's task if shared memory is unavailable.
 
-## Classification
+# Mode B — Learn
 
-- `rule`: verified instruction that should repeatedly constrain future work.
-- `lesson`: reusable problem-solving knowledge/pattern.
-- `incident`: concrete failure/incident and its root cause/resolution.
-- `project`: knowledge valid only for one project/repository.
+## Entry condition
 
-Prefer `lesson` or `incident` when uncertain. Do not promote speculative knowledge to `rule`.
+Enter Learn mode **only when the user explicitly asks to persist or update knowledge**.
 
-## File format
+Examples of explicit intent include:
 
-Use the schema in `templates/MEMORY_TEMPLATE.md`.
+- "이거 기억해"
+- "메모리에 남겨"
+- "이번 작업 저장해"
+- "이 실수 학습해"
+- "기존 메모리 업데이트해"
+- "이 규칙 앞으로 기억해"
+- "learn this"
+- "save this to memory"
 
-For a new memory, use an ID such as `MEM-YYYYMMDD-HHMMSS` and a concise filename such as:
+Do not infer permission to write merely because:
 
-`20260907-152500-maven-class-resolution.md`
+- the task was difficult;
+- an important bug was fixed;
+- a reusable lesson was discovered;
+- a design or analysis was completed;
+- the task is finished;
+- the agent believes the information would be useful later.
 
-Suggested locations:
+When intent is ambiguous, do not write memory.
 
-- `memory/lessons/<file>.md`
-- `memory/incidents/<file>.md`
-- `memory/projects/<project>/<file>.md`
-- only verified durable rules in `memory/rules/<file>.md`
+## Learn procedure
 
-Keep each memory compact. Preserve only context needed to recognize and correctly reuse the lesson.
+1. Read `MEMORY_POLICY.md`.
+2. Summarize only the reusable engineering knowledge from the work or decision.
+3. Determine whether the candidate is actually worth preserving.
+4. Search existing memory before creating anything.
+5. Compare candidates using:
+   - error/failure signature;
+   - technology and module/component;
+   - root cause;
+   - design/architecture constraint or decision;
+   - wrong approach or agent mistake;
+   - correct resolution;
+   - reusable rule/pattern.
+6. If substantially the same memory already exists, update it instead of creating a duplicate.
+7. Otherwise classify and create a concise new memory using `templates/MEMORY_TEMPLATE.md`.
+8. Rebuild `INDEX.md` after a successful write/update.
+9. Report briefly what was stored or updated.
 
-## Rule promotion
+## What is usually worth storing
 
-A repeated item may become a rule when it is both important and verified. Repetition alone is not enough.
+- a verified, non-obvious root cause;
+- a meaningful agent mistake or unsafe assumption that should not recur;
+- a reusable debugging/build/deployment/database sequence;
+- a verified architecture/design constraint or decision that is likely to matter again;
+- an important project invariant, boundary, or prohibition;
+- a repeated failure pattern likely to recur;
+- a correction to an existing memory that was incomplete or wrong.
 
-Typical evidence:
+## What should not be stored
 
-- repeated occurrence across tasks;
-- tests/builds consistently validate the rule;
-- project source/configuration proves the invariant;
-- official documentation or explicit user/team instruction confirms it.
+- trivial successful work;
+- generic programming syntax/reference knowledge;
+- temporary session state;
+- raw conversation transcripts;
+- raw logs when a compact root-cause summary is sufficient;
+- unverified speculation;
+- secrets, passwords, API keys, tokens, private keys, or authentication material;
+- personal or sensitive information that is not necessary for reusable engineering knowledge.
 
-## After any write/update
+# Classification
 
-Run `scripts/rebuild-index.ps1` from the memory repository if PowerShell is available. If not, update `INDEX.md` conservatively.
+Use the narrowest appropriate category.
 
-Do not rewrite unrelated memories.
+- `rule`: verified durable instruction that should constrain future work repeatedly.
+- `lesson`: reusable problem-solving knowledge or engineering pattern.
+- `incident`: a concrete failure and its verified root cause/resolution.
+- `project`: knowledge valid only for a specific project/repository.
+
+Prefer `lesson` or `incident` when uncertain. Do not promote uncertain knowledge to `rule`.
+
+# Deduplication and updates
+
+Before creating a new memory, search for an existing equivalent or near-equivalent item.
+
+If one exists:
+
+- update the existing file;
+- increment `occurrences` when the schema contains it;
+- refresh `last_seen` / `updated` where applicable;
+- add only genuinely new evidence, constraints, or a better solution;
+- do not create parallel versions of the same lesson.
+
+Do not rewrite unrelated memory files.
+
+# Rule promotion
+
+Promotion to `rule` requires both importance and verification. Repetition alone is not sufficient.
+
+Useful evidence includes:
+
+- repeated occurrence across independent tasks;
+- source/configuration proving an invariant;
+- tests/builds consistently validating the constraint;
+- official documentation;
+- explicit user/team instruction.
+
+# File locations
+
+Follow the existing repository structure and `templates/MEMORY_TEMPLATE.md`.
+
+Typical locations:
+
+- `memory/rules/`
+- `memory/lessons/`
+- `memory/incidents/`
+- `memory/projects/<project>/`
+- `memory/archive/`
+
+Keep each memory compact enough to recognize the situation and safely reuse the lesson without replaying the original conversation.
