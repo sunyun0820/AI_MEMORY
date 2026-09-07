@@ -18,10 +18,14 @@ function Get-ToolMetadata {
 
     $metadata = [ordered]@{}
     $currentListKey = $null
+    $closed = $false
 
     for ($i = 1; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
-        if ($line.Trim() -eq "---") { break }
+        if ($line.Trim() -eq "---") {
+            $closed = $true
+            break
+        }
 
         if ($null -ne $currentListKey -and $line -match '^\s*-\s+(.+?)\s*$') {
             $metadata[$currentListKey] += @($Matches[1].Trim().Trim('"').Trim("'"))
@@ -44,6 +48,7 @@ function Get-ToolMetadata {
         }
     }
 
+    if (-not $closed) { return $null }
     return $metadata
 }
 
@@ -67,11 +72,12 @@ if (-not (Test-Path $ToolsRoot -PathType Container)) {
 
 $toolDocs = @(Get-ChildItem -Path $ToolsRoot -Filter "TOOL.md" -File -Recurse | Sort-Object FullName)
 $rows = @()
+$validSafety = @("read-only", "write-local", "destructive", "external")
 
 foreach ($toolDoc in $toolDocs) {
     $meta = Get-ToolMetadata -Path $toolDoc.FullName
     if ($null -eq $meta) {
-        Write-Warning "YAML Front Matter를 읽을 수 없어 제외합니다: $($toolDoc.FullName)"
+        Write-Warning "정상적인 YAML Front Matter를 읽을 수 없어 제외합니다: $($toolDoc.FullName)"
         continue
     }
 
@@ -83,7 +89,19 @@ foreach ($toolDoc in $toolDocs) {
         continue
     }
 
-    $relativePath = $toolDoc.FullName.Substring($RepoRoot.Length).TrimStart('\', '/') -replace '\\', '/'
+    $safety = (Join-MetadataValue $meta["safety"]).ToLowerInvariant()
+    if ($safety -notin $validSafety) {
+        Write-Warning "잘못된 safety 값으로 제외합니다: $($toolDoc.FullName) / $safety"
+        continue
+    }
+
+    $idempotent = (Join-MetadataValue $meta["idempotent"]).ToLowerInvariant()
+    if ($idempotent -notin @("true", "false")) {
+        Write-Warning "idempotent는 true 또는 false여야 합니다: $($toolDoc.FullName)"
+        continue
+    }
+
+    $relativePath = $toolDoc.FullName.Substring($RepoRoot.Length).TrimStart([char[]]"\/") -replace '\\', '/'
 
     $rows += [PSCustomObject]@{
         Name        = Join-MetadataValue $meta["name"]
@@ -91,8 +109,8 @@ foreach ($toolDoc in $toolDocs) {
         Description = Join-MetadataValue $meta["description"]
         Platforms   = Join-MetadataValue $meta["platforms"]
         Runtime     = Join-MetadataValue $meta["runtime"]
-        Safety      = Join-MetadataValue $meta["safety"]
-        Idempotent  = Join-MetadataValue $meta["idempotent"]
+        Safety      = $safety
+        Idempotent  = $idempotent
         Tags        = Join-MetadataValue $meta["tags"]
         Path        = $relativePath
     }
@@ -121,11 +139,11 @@ else {
         $description = Escape-MarkdownCell $row.Description
         $platforms = Escape-MarkdownCell $row.Platforms
         $runtime = Escape-MarkdownCell $row.Runtime
-        $safety = Escape-MarkdownCell $row.Safety
-        $idempotent = Escape-MarkdownCell $row.Idempotent
+        $safetyCell = Escape-MarkdownCell $row.Safety
+        $idempotentCell = Escape-MarkdownCell $row.Idempotent
         $tags = Escape-MarkdownCell $row.Tags
         $path = Escape-MarkdownCell $row.Path
-        [void]$builder.AppendLine("| $name | $category | $description | $platforms | $runtime | $safety | $idempotent | $tags | `$path` |")
+        [void]$builder.AppendLine("| $name | $category | $description | $platforms | $runtime | $safetyCell | $idempotentCell | $tags | `$path` |")
     }
 }
 
