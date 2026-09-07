@@ -112,7 +112,15 @@ function Test-ManagedInstruction {
         return
     }
 
-    $content = Get-Content $Path -Raw -Encoding UTF8
+    $content = ""
+    $readContent = Get-Content $Path -Raw -Encoding UTF8
+    if ($null -ne $readContent) { $content = [string]$readContent }
+
+    if ([string]::IsNullOrWhiteSpace($content)) {
+        Write-DoctorResult FAIL "$AgentName global instruction is empty: $Path"
+        return
+    }
+
     if ($content.Contains($ManagedStart) -and $content.Contains($ManagedEnd)) {
         Write-DoctorResult OK "$AgentName global instruction managed by AI_MEMORY"
     }
