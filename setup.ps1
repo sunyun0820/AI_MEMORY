@@ -128,7 +128,12 @@ function Set-ManagedInstructionBlock {
     }
 
     $block = "$ManagedStart`r`n$Content`r`n$ManagedEnd"
-    $existing = if (Test-Path $Path) { Get-Content $Path -Raw -Encoding UTF8 } else { "" }
+    $existing = ""
+    if (Test-Path $Path) {
+        $readContent = Get-Content $Path -Raw -Encoding UTF8
+        if ($null -ne $readContent) { $existing = [string]$readContent }
+    }
+
     $startIndex = $existing.IndexOf($ManagedStart)
     $endIndex = $existing.IndexOf($ManagedEnd)
 
@@ -175,7 +180,10 @@ $ManagedEnd
 "@
 
     if (Test-Path $Path) {
-        $existing = Get-Content $Path -Raw -Encoding UTF8
+        $existing = ""
+        $readContent = Get-Content $Path -Raw -Encoding UTF8
+        if ($null -ne $readContent) { $existing = [string]$readContent }
+
         if (-not $existing.Contains($ManagedStart) -or -not $existing.Contains($ManagedEnd)) {
             Write-Warning "Cursor rule exists but is not managed by AI_MEMORY. Skipped: $Path"
             return
@@ -293,7 +301,8 @@ else {
 
 Write-Host ""
 Write-Host "=== Global Instructions ==="
-$globalInstruction = (Get-Content $GlobalInstructionSource -Raw -Encoding UTF8).Trim()
+$globalInstruction = [string](Get-Content $GlobalInstructionSource -Raw -Encoding UTF8)
+$globalInstruction = $globalInstruction.Trim()
 
 if ($codexInstalled) {
     Set-ManagedInstructionBlock -AgentName "Codex" -Path (Join-Path $codexHome "AGENTS.md") -Content $globalInstruction
