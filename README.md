@@ -101,11 +101,42 @@ AI_MEMORY_HOME=<현재 Repository 경로>
 
 이미 올바른 값이면 그대로 둡니다.
 
-### 2. 전역 Skill 자동 연결
+### 2. 설치된 Agent 감지
+
+`setup.ps1`은 이 PC에 실제로 설치되어 있거나 사용 흔적이 확인되는 Agent만 구성합니다.
+
+```text
+=== Agent Detection ===
+[OK]   Codex 발견
+[OK]   Cursor 발견
+[SKIP] Claude Code 설치 흔적 없음
+[SKIP] Antigravity 설치 흔적 없음
+```
+
+`[SKIP]`된 Agent에 대해서는:
+
+- 전역 Skill Junction을 만들지 않습니다.
+- 전역 지침을 만들지 않습니다.
+- `.claude`, `.cursor`, `.gemini` 같은 Agent 설정 폴더도 새로 만들지 않습니다.
+
+즉, 설치되지 않은 Agent는 **아무 변경 없이 그대로 건너뜁니다.**
+
+단순히 Agent 루트 폴더가 존재한다는 이유만으로 설치된 것으로 판단하지 않습니다. 이전 버전의 AI_MEMORY setup이 만들어 놓은 폴더를 실제 설치로 오인하지 않도록, 실행 명령 또는 실제 설정/앱 데이터 같은 더 구체적인 흔적을 사용합니다.
+
+현재 주요 감지 기준은 다음과 같습니다.
+
+- Codex: `codex` 명령 또는 `~/.codex/config.toml`
+- Cursor: `agent` 명령 또는 Cursor 실행 파일
+- Claude Code: `claude` 명령 또는 `~/.claude/settings.json`
+- Antigravity: `agy` 명령 또는 Antigravity 전용 앱/설정 데이터
+
+Codex와 Cursor 중 하나라도 설치되어 있으면 둘이 공통으로 사용하는 `~/.agents/skills` 경로를 구성합니다.
+
+### 3. 전역 Skill 자동 연결
 
 `skills/*/SKILL.md`를 자동 탐색합니다.
 
-탐색된 Skill은 Junction으로 연결합니다.
+탐색된 Skill은 **설치된 Agent에만** Junction으로 연결합니다.
 
 ```text
 Codex + Cursor
@@ -120,7 +151,7 @@ Antigravity
 
 따라서 Skill 원본은 `AI_MEMORY\skills\` 한 곳에서만 관리합니다.
 
-### 3. 공용 전역 지침 배포
+### 4. 공용 전역 지침 배포
 
 전역 지침의 유일한 원본은 다음 파일입니다.
 
@@ -128,7 +159,7 @@ Antigravity
 instructions/GLOBAL_AGENT_INSTRUCTIONS.md
 ```
 
-`setup.ps1`이 각 Agent에 반영합니다.
+`setup.ps1`이 **설치된 Agent에만** 반영합니다.
 
 ```text
 Codex       → ~/.codex/AGENTS.md
@@ -242,7 +273,17 @@ cd AI_MEMORY
 .\setup.ps1
 ```
 
-으로 공용 Memory 경로, 전역 Skills, 전역 지침을 다시 구성합니다.
+으로 공용 Memory 경로와 **그 PC에 설치된 Agent의** 전역 Skills/전역 지침만 구성합니다.
+
+예를 들어 새 PC에 Codex만 설치되어 있다면 Codex 관련 구성만 적용되고 Cursor, Claude Code, Antigravity는 건너뜁니다.
+
+나중에 해당 PC에 Claude Code를 새로 설치했다면 다시:
+
+```powershell
+.\setup.ps1
+```
+
+만 실행하면 새로 감지된 Claude Code에도 공용 Skill과 전역 지침이 적용됩니다.
 
 ## Git 운영
 
