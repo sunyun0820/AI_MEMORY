@@ -1,7 +1,7 @@
 {
   "name": "ai-memory",
-  "description": "Shared AI_MEMORY rules, memory guidance, and engineering safety constraints.",
-  "version": "1.0.1",
+  "description": "Shared AI_MEMORY safety and engineering rules for Cursor.",
+  "version": "1.1.0",
   "author": {
     "name": "sunyun0820"
   },
