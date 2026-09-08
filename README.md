@@ -8,6 +8,7 @@ Codex, Cursor, Claude Code, Gemini/Antigravity 등 여러 개발 Agent가 **공�
 2. 반복적이고 기계적인 작업은 검증된 Tool로 실행하여 속도와 토큰 사용량을 줄입니다.
 3. 여러 PC와 여러 Agent에서 최대한 동일한 환경을 `git clone + setup.ps1`로 재현합니다.
 4. DB/Git/엔지니어링 같은 공통 안전 규칙은 Agent별로 복붙하지 않고 AI_MEMORY 한 곳에서 관리합니다.
+5. 전역 Skill도 AI_MEMORY를 canonical source로 삼고 여러 Agent에 동일하게 배포합니다.
 
 ## 핵심 구조
 
@@ -40,13 +41,14 @@ AI_MEMORY/
 │        └─ engineering-principles.mdc
 │
 ├─ skills/
-│  └─ agent-memory/
-│     └─ SKILL.md
+│  ├─ agent-memory/
+│  └─ <shared-skill>/
 │
 ├─ memory/
 ├─ tools/
 ├─ templates/
 └─ scripts/
+   └─ import-global-skills.ps1
 ```
 
 ## 역할 구분
@@ -94,6 +96,67 @@ canonical rules
 Cursor에서는 `agent-memory` Skill이 Memory Recall/Learn 동작을 담당하고, 공용 안전 Rule 3개는 local plugin의 독립된 `alwaysApply` Rule 3개로 배포합니다.
 
 따라서 Cursor `Customize → Plugins`에는 **Ai Memory 플러그인 1개**가 보이는 것이 정상이고, `Customize → Rules`에는 AI_MEMORY가 제공하는 **Rule 3개**가 별도로 보여야 정상입니다.
+
+# Shared Skills
+
+공용 Skill의 canonical source는 항상 다음입니다.
+
+```text
+AI_MEMORY/skills/<skill-name>/
+```
+
+Agent별 설치 디렉터리는 배포 대상일 뿐 원본으로 취급하지 않습니다.
+
+새 전역 Skill을 다른 Agent 또는 패키지 관리 도구로 먼저 설치한 경우에는 다음 스크립트를 반복해서 사용할 수 있습니다.
+
+```powershell
+.\scripts\import-global-skills.ps1
+```
+
+기본 검색 대상은 현재 존재하는 다음 전역 Skill 경로입니다.
+
+```text
+~/.agents/skills
+~/.gemini/config/skills
+~/.gemini/skills
+~/.claude/skills
+~/.cursor/skills
+```
+
+동작 원칙:
+
+1. 각 경로에서 `SKILL.md`가 있는 활성 Skill만 찾습니다.
+2. `AI_MEMORY/skills/<name>`에 이미 있으면 다시 가져오지 않습니다.
+3. AI_MEMORY에 없는 Skill만 디렉터리 전체를 임시 위치로 복사합니다.
+4. 모든 파일의 SHA-256 fingerprint가 원본과 같은지 검증한 뒤 canonical 디렉터리로 확정합니다.
+5. `~/.agents/skills`에서 가져온 Skill은 검증 성공 후 원본 디렉터리를 AI_MEMORY canonical Skill을 가리키는 junction으로 바꿉니다.
+6. Gemini/Antigravity/Claude/Cursor의 다른 source root는 import source로만 사용하며 import 스크립트가 직접 삭제하지 않습니다. 이후 `setup.ps1`이 Agent별 배포 형식으로 동기화합니다.
+7. AI_MEMORY 안의 기존 Skill을 자동 덮어쓰지 않습니다. 이름은 같지만 내용이 다르면 경고하고 둘 다 보존합니다.
+
+변경 없이 어떤 Skill이 import 대상인지 먼저 보고 싶으면:
+
+```powershell
+.\scripts\import-global-skills.ps1 -WhatIf
+```
+
+`~/.agents/skills`의 실제 디렉터리를 junction으로 바꾸지 않고 원본을 그대로 유지하려면:
+
+```powershell
+.\scripts\import-global-skills.ps1 -KeepAgentsSource
+```
+
+특정 경로만 검사할 수도 있습니다.
+
+```powershell
+.\scripts\import-global-skills.ps1 -SourceRoot "$HOME\.agents\skills"
+```
+
+Import 후에는 새로 생긴 `skills/*`를 검토하고 Git에 반영한 다음 아래를 실행합니다.
+
+```powershell
+.\setup.ps1
+.\doctor.ps1
+```
 
 # Agent 기본 흐름
 
@@ -164,7 +227,7 @@ Repository 위치는 고정되지 않습니다. `setup.ps1`이 현재 Repository
 3. Cursor용 `.mdc` Rule 3개 재생성
 4. `AI_MEMORY_HOME` 등록
 5. 설치된 Agent 감지
-6. 공용 Skill 연결
+6. `AI_MEMORY/skills/*`의 모든 canonical Skill 연결/복사
 7. Agent별 전역 지침/Rule 배포
 8. 구버전 Cursor junction 또는 통합 `ai-memory.mdc`를 AI_MEMORY 소유인 경우에만 안전하게 정리
 
@@ -249,7 +312,7 @@ Doctor는 다음을 검사합니다.
 - Cursor local plugin이 junction이 아닌 실제 폴더인지
 - Cursor plugin manifest와 설치된 Rule 3개가 AI_MEMORY 원본과 일치하는지
 - 구버전 통합 `ai-memory.mdc`가 제거되었는지
-- Agent 감지 및 Skill junction
+- Agent 감지 및 canonical Skill 배포 상태
 - Codex/Claude/Gemini managed block 동기화 상태
 
 Doctor는 Cursor UI 내부의 조직 정책까지 판정하지는 못합니다.
@@ -274,6 +337,12 @@ git pull
 ```
 
 새 Agent를 설치한 뒤에도 `setup.ps1`을 다시 실행하면 감지된 Agent에 공용 설정이 추가됩니다.
+
+새로운 전역 Skill을 외부 도구로 설치한 뒤 AI_MEMORY 중앙관리 대상으로 편입하려면:
+
+```powershell
+.\scripts\import-global-skills.ps1
+```
 
 # Git 운영
 
