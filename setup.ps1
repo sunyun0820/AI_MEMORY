@@ -15,21 +15,9 @@ $ManagedStart = "<!-- AI_MEMORY_MANAGED_START -->"
 $ManagedEnd = "<!-- AI_MEMORY_MANAGED_END -->"
 
 $RuleDefinitions = @(
-    [pscustomobject]@{
-        Source = "db-safety.md"
-        Adapter = "db-safety.mdc"
-        Description = "AI_MEMORY database access and credential safety rules."
-    },
-    [pscustomobject]@{
-        Source = "git-safety.md"
-        Adapter = "git-safety.mdc"
-        Description = "AI_MEMORY Git safety rules."
-    },
-    [pscustomobject]@{
-        Source = "engineering-principles.md"
-        Adapter = "engineering-principles.mdc"
-        Description = "AI_MEMORY shared engineering principles."
-    }
+    [pscustomobject]@{ Source = "db-safety.md"; Adapter = "db-safety.mdc"; Description = "AI_MEMORY database access and credential safety rules." },
+    [pscustomobject]@{ Source = "git-safety.md"; Adapter = "git-safety.mdc"; Description = "AI_MEMORY Git safety rules." },
+    [pscustomobject]@{ Source = "engineering-principles.md"; Adapter = "engineering-principles.mdc"; Description = "AI_MEMORY shared engineering principles." }
 )
 
 function Normalize-Text {
@@ -91,7 +79,6 @@ function Get-SharedRulesBody {
     foreach ($rule in $RuleDefinitions) {
         $path = Join-Path $RulesRoot $rule.Source
         if (-not (Test-Path $path -PathType Leaf)) { throw "Required shared rule not found: $path" }
-
         $content = [string](Get-Content $path -Raw -Encoding UTF8)
         if ([string]::IsNullOrWhiteSpace($content)) { throw "Shared rule is empty: $path" }
         $parts += $content.Trim()
@@ -173,7 +160,6 @@ function Ensure-Junction {
             Write-Warning "$Label has a different link at: $JunctionPath"
             return
         }
-
         Write-Warning "$Label has a real file/directory at: $JunctionPath"
         return
     }
@@ -186,20 +172,12 @@ function Remove-DirectoryLinkOnly {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     if (-not (Test-Path $Path)) { return $true }
-
     $item = Get-Item $Path -Force
-    if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") {
-        Write-Warning "Refusing to remove a non-link directory: $Path"
-        return $false
-    }
+    if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") { return $false }
 
     $comspec = if ([string]::IsNullOrWhiteSpace($env:ComSpec)) { "cmd.exe" } else { $env:ComSpec }
     $process = Start-Process -FilePath $comspec -ArgumentList @("/d", "/c", "rmdir `"$Path`"") -NoNewWindow -Wait -PassThru
-    if ($process.ExitCode -ne 0 -or (Test-Path $Path)) {
-        Write-Warning "Failed to remove directory link safely: $Path"
-        return $false
-    }
-    return $true
+    return ($process.ExitCode -eq 0 -and -not (Test-Path $Path))
 }
 
 function Remove-LegacyJunctionIfOwned {
@@ -209,15 +187,17 @@ function Remove-LegacyJunctionIfOwned {
     )
 
     if (-not (Test-Path $Path)) { return $true }
-
     $item = Get-Item $Path -Force
     if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") { return $true }
 
     foreach ($target in @($item.Target)) {
         if (Test-SamePath -PathA $target -PathB $ExpectedTarget) {
-            if (-not (Remove-DirectoryLinkOnly -Path $Path)) { return $false }
-            Write-Host "[CLEAN] Removed legacy AI_MEMORY directory link: $Path"
-            return $true
+            if (Remove-DirectoryLinkOnly -Path $Path) {
+                Write-Host "[CLEAN] Removed legacy AI_MEMORY directory link: $Path"
+                return $true
+            }
+            Write-Warning "Failed to remove legacy AI_MEMORY directory link: $Path"
+            return $false
         }
     }
 
@@ -232,7 +212,6 @@ function Remove-ManagedFileIfOwned {
     )
 
     if (-not (Test-Path $Path -PathType Leaf)) { return }
-
     $content = [string](Get-Content $Path -Raw -Encoding UTF8)
     if ($content.Contains($ManagedStart) -and $content.Contains($ManagedEnd)) {
         Remove-Item $Path -Force
@@ -306,7 +285,10 @@ function Sync-ManagedSkillCopy {
                 Write-Warning "$Label has a different link and was not changed: $DestinationPath"
                 return
             }
-            if (-not (Remove-DirectoryLinkOnly -Path $DestinationPath)) { return }
+            if (-not (Remove-DirectoryLinkOnly -Path $DestinationPath)) {
+                Write-Warning "$Label legacy link could not be removed: $DestinationPath"
+                return
+            }
         }
         else {
             $destinationSkill = Join-Path $DestinationPath "SKILL.md"
@@ -314,14 +296,12 @@ function Sync-ManagedSkillCopy {
                 Write-Warning "$Label destination is not an AI skill directory and was not changed: $DestinationPath"
                 return
             }
-
             $destinationText = [string](Get-Content $destinationSkill -Raw -Encoding UTF8)
             $escapedSkillName = [regex]::Escape($SkillName)
             if ($destinationText -notmatch ("(?m)^name:\s*" + $escapedSkillName + "\s*$")) {
                 Write-Warning "$Label destination appears to belong to another skill and was not changed: $DestinationPath"
                 return
             }
-
             Remove-Item $DestinationPath -Recurse -Force
         }
     }
@@ -331,18 +311,40 @@ function Sync-ManagedSkillCopy {
     Write-Host "[OK]   $Label copied as real files: $DestinationPath"
 }
 
+function Remove-ManagedSkillCopyIfOwned {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$SkillName,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (-not (Test-Path $Path)) { return }
+    $item = Get-Item $Path -Force
+    if ($item.LinkType -eq "Junction" -or $item.LinkType -eq "SymbolicLink") {
+        Write-Warning "$Label is a link and was not removed automatically: $Path"
+        return
+    }
+
+    $skillFile = Join-Path $Path "SKILL.md"
+    if (-not (Test-Path $skillFile -PathType Leaf)) { return }
+    $text = [string](Get-Content $skillFile -Raw -Encoding UTF8)
+    $escapedSkillName = [regex]::Escape($SkillName)
+    if ($text -match ("(?m)^name:\s*" + $escapedSkillName + "\s*$")) {
+        Remove-Item $Path -Recurse -Force
+        Write-Host "[CLEAN] Removed stale AI_MEMORY skill copy: $Path"
+    }
+}
+
 function Install-CursorLocalPlugin {
     param([Parameter(Mandatory = $true)][string]$CursorHome)
 
     $installRoot = Join-Path $CursorHome "plugins\local\ai-memory"
-
     if (-not (Remove-LegacyJunctionIfOwned -Path $installRoot -ExpectedTarget $CursorPluginRoot)) {
         Write-Warning "Cursor local plugin install skipped because the destination is a different link."
         return
     }
 
     if (-not (Test-Path $installRoot)) { New-Item -ItemType Directory -Path $installRoot -Force | Out-Null }
-
     $installItem = Get-Item $installRoot -Force
     if ($installItem.LinkType -eq "Junction" -or $installItem.LinkType -eq "SymbolicLink") {
         Write-Warning "Cursor local plugin destination is still a link and was not modified: $installRoot"
@@ -353,7 +355,6 @@ function Install-CursorLocalPlugin {
 
     $installedRulesRoot = Join-Path $installRoot "rules"
     if (-not (Test-Path $installedRulesRoot)) { New-Item -ItemType Directory -Path $installedRulesRoot -Force | Out-Null }
-
     Remove-ManagedFileIfOwned -Path (Join-Path $installedRulesRoot "ai-memory.mdc") -Label "legacy combined Cursor rule"
 
     foreach ($rule in $RuleDefinitions) {
@@ -398,25 +399,23 @@ if ([string]::IsNullOrWhiteSpace($currentHome) -or -not (Test-SamePath -PathA $c
     [Environment]::SetEnvironmentVariable("AI_MEMORY_HOME", $RepoRoot, "User")
     Write-Host "[SET]  AI_MEMORY_HOME=$RepoRoot"
 }
-else {
-    Write-Host "[OK]   AI_MEMORY_HOME=$currentHome"
-}
+else { Write-Host "[OK]   AI_MEMORY_HOME=$currentHome" }
 $env:AI_MEMORY_HOME = $RepoRoot
 
 $codexHome = if (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
 $claudeHome = if (-not [string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR)) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME ".claude" }
 $cursorHome = Join-Path $HOME ".cursor"
 $geminiHome = Join-Path $HOME ".gemini"
-$antigravityIdeHome = Join-Path $geminiHome "antigravity"
-$antigravityCliHome = Join-Path $geminiHome "antigravity-cli"
-$antigravityLegacyConfigHome = Join-Path $geminiHome "config"
+$antigravityIdeSkillsHome = Join-Path $geminiHome "config\skills"
+$antigravityCliSkillsHome = Join-Path $geminiHome "antigravity-cli\skills"
+$staleAntigravityIdeSkillsHome = Join-Path $geminiHome "antigravity\skills"
 
 $codexEvidence = @((Join-Path $codexHome "config.toml"))
 $claudeEvidence = @((Join-Path $claudeHome "settings.json"))
 $cursorEvidence = @()
 $geminiEvidence = @((Join-Path $geminiHome "settings.json"))
-$antigravityIdeEvidence = @($antigravityIdeHome)
-$antigravityCliEvidence = @((Join-Path $antigravityCliHome "settings.json"))
+$antigravityIdeEvidence = @((Join-Path $geminiHome "config"), (Join-Path $geminiHome "antigravity"))
+$antigravityCliEvidence = @((Join-Path $geminiHome "antigravity-cli\settings.json"))
 
 if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
     $cursorEvidence += (Join-Path $env:LOCALAPPDATA "Programs\cursor\Cursor.exe")
@@ -487,28 +486,28 @@ else { Write-Host "[SKIP] No skill junction work required." }
 Write-Host ""
 Write-Host "=== Gemini / Antigravity Skill Copies ==="
 foreach ($skill in $skillDirectories) {
-    $legacySkill = Join-Path $antigravityLegacyConfigHome "skills\$($skill.Name)"
-    Remove-LegacyJunctionIfOwned -Path $legacySkill -ExpectedTarget $skill.FullName | Out-Null
-
     if ($geminiInstalled) {
         Sync-ManagedSkillCopy -Label "Gemini CLI skill $($skill.Name)" -SkillName $skill.Name -SourcePath $skill.FullName -DestinationPath (Join-Path $geminiHome "skills\$($skill.Name)")
     }
     if ($antigravityIdeInstalled) {
-        Sync-ManagedSkillCopy -Label "Antigravity IDE skill $($skill.Name)" -SkillName $skill.Name -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityIdeHome "skills\$($skill.Name)")
+        # Official Antigravity IDE global skills path.
+        Sync-ManagedSkillCopy -Label "Antigravity IDE skill $($skill.Name)" -SkillName $skill.Name -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityIdeSkillsHome $skill.Name)
+        # Cleanup a stale path used by an earlier AI_MEMORY setup revision.
+        Remove-ManagedSkillCopyIfOwned -Label "stale Antigravity IDE skill $($skill.Name)" -SkillName $skill.Name -Path (Join-Path $staleAntigravityIdeSkillsHome $skill.Name)
     }
     if ($antigravityCliInstalled) {
-        Sync-ManagedSkillCopy -Label "Antigravity CLI skill $($skill.Name)" -SkillName $skill.Name -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityCliHome "skills\$($skill.Name)")
+        Sync-ManagedSkillCopy -Label "Antigravity CLI skill $($skill.Name)" -SkillName $skill.Name -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityCliSkillsHome $skill.Name)
     }
 }
 
-$legacyAntigravityAgents = Join-Path $antigravityLegacyConfigHome "AGENTS.md"
+$legacyAntigravityAgents = Join-Path $geminiHome "config\AGENTS.md"
 if (Test-Path $legacyAntigravityAgents -PathType Leaf) {
     $legacyContent = [string](Get-Content $legacyAntigravityAgents -Raw -Encoding UTF8)
     if ($legacyContent.Contains($ManagedStart) -and $legacyContent.Contains($ManagedEnd)) {
         Remove-ManagedFileIfOwned -Path $legacyAntigravityAgents -Label "legacy Antigravity managed AGENTS.md"
     }
     else {
-        Write-Warning "Legacy Antigravity config AGENTS.md exists and may duplicate ~/.gemini/GEMINI.md. It was not modified: $legacyAntigravityAgents"
+        Write-Warning "Antigravity config AGENTS.md exists and may duplicate ~/.gemini/GEMINI.md. It was not modified: $legacyAntigravityAgents"
     }
 }
 
