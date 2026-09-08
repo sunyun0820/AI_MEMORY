@@ -93,7 +93,7 @@ canonical rules
              └─ engineering-principles.mdc
 ```
 
-Cursor에서는 `agent-memory` Skill이 Memory Recall/Learn/Backfill 동작을 담당하고, 공용 안전 Rule 3개는 local plugin의 독립된 `alwaysApply` Rule 3개로 배포합니다.
+Cursor에서는 `agent-memory` Skill이 Memory Recall/Learn/Backfill/Refine 동작을 담당하고, 공용 안전 Rule 3개는 local plugin의 독립된 `alwaysApply` Rule 3개로 배포합니다.
 
 따라서 Cursor `Customize → Plugins`에는 **Ai Memory 플러그인 1개**가 보이는 것이 정상이고, `Customize → Rules`에는 AI_MEMORY가 제공하는 **Rule 3개**가 별도로 보여야 정상입니다.
 
@@ -178,6 +178,8 @@ Import 후에는 새로 생긴 `skills/*`를 검토하고 Git에 반영한 다�
 명시 요청 시 현재 지식은 Learn/Remember
 또는
 명시 요청 시 세션 전체 회고는 Backfill
+또는
+명시 요청 시 저장된 Memory 전체 품질 정리는 Refine
 ```
 
 ## Memory 원칙
@@ -200,17 +202,26 @@ Import 후에는 새로 생긴 `skills/*`를 검토하고 Git에 반영한 다�
 
 Tool 후보는 Backfill에서 발굴/보고만 하며 자동 구현하지 않습니다.
 
+### Refine = 사용자 명시 요청
+
+이미 AI_MEMORY에 저장된 active Memory 전체를 현재 품질 기준으로 재평가하고 정제하는 유지보수 모드입니다.
+
+Remember로 저장됐는지, Backfill로 저장됐는지, 과거 수동으로 작성됐는지는 구분하지 않습니다. `memory/rules/`, `memory/lessons/`, `memory/incidents/`, `memory/projects/` 전체를 대상으로 KEEP / REFINE / GENERALIZE / MERGE / ARCHIVE / VERIFY 판정을 수행합니다.
+
+Refine은 구현 요약을 줄이고 재사용성·공용화·재발방지·적용범위·검증성을 강화합니다. `memory/archive/`와 `TOOL_CANDIDATES.md`는 기본 정제 대상이 아닙니다.
+
 권장 호출:
 
 ```text
 agent_memory recall
 agent_memory remember
 agent_memory backfill
+agent_memory refine
 ```
 
-`agent-memory`처럼 하이픈으로 적어도 됩니다. 자세한 사용법은 `skills/agent-memory/README.md`와 `skills/agent-memory/references/backfill.md`를 참고합니다.
+`agent-memory`처럼 하이픈으로 적어도 됩니다. 자세한 사용법은 `skills/agent-memory/README.md`, `skills/agent-memory/references/backfill.md`, `skills/agent-memory/references/refine.md`를 참고합니다.
 
-세부 저장 기준은 `MEMORY_POLICY.md`를 따릅니다.
+세부 저장/정제 기준은 `MEMORY_POLICY.md`를 따릅니다.
 
 # Tool 원칙
 
