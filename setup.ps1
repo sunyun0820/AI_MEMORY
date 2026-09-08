@@ -236,7 +236,7 @@ function Remove-ManagedFileIfOwned {
     $content = [string](Get-Content $Path -Raw -Encoding UTF8)
     if ($content.Contains($ManagedStart) -and $content.Contains($ManagedEnd)) {
         Remove-Item $Path -Force
-        Write-Host "[CLEAN] Removed $Label: $Path"
+        Write-Host ("[CLEAN] Removed {0}: {1}" -f $Label, $Path)
     }
     else {
         Write-Warning "Refusing to remove unmanaged file: $Path"
