@@ -183,6 +183,33 @@ function Ensure-Junction {
     Write-Host "[OK]   $Label linked: $JunctionPath"
 }
 
+function Remove-DirectoryLinkOnly {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path $Path)) { return $true }
+
+    $item = Get-Item $Path -Force
+    if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") {
+        Write-Warning "Refusing to remove a non-link directory: $Path"
+        return $false
+    }
+
+    $comspec = $env:ComSpec
+    if ([string]::IsNullOrWhiteSpace($comspec)) {
+        $comspec = "cmd.exe"
+    }
+
+    # Use cmd.exe rmdir without /s so Windows removes only the directory link itself.
+    # This avoids the recursive-delete confirmation PowerShell 5.1 can show for junctions.
+    $process = Start-Process -FilePath $comspec -ArgumentList @("/d", "/c", "rmdir `"$Path`"") -NoNewWindow -Wait -PassThru
+    if ($process.ExitCode -ne 0 -or (Test-Path $Path)) {
+        Write-Warning "Failed to remove directory link safely: $Path"
+        return $false
+    }
+
+    return $true
+}
+
 function Remove-LegacyJunctionIfOwned {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -190,13 +217,18 @@ function Remove-LegacyJunctionIfOwned {
     )
 
     if (-not (Test-Path $Path)) { return $true }
+
     $item = Get-Item $Path -Force
-    if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") { return $true }
+    if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") {
+        return $true
+    }
 
     foreach ($target in @($item.Target)) {
         if (Test-SamePath -PathA $target -PathB $ExpectedTarget) {
-            Remove-Item $Path -Force
-            Write-Host "[CLEAN] Removed legacy AI_MEMORY junction: $Path"
+            if (-not (Remove-DirectoryLinkOnly -Path $Path)) {
+                return $false
+            }
+            Write-Host "[CLEAN] Removed legacy AI_MEMORY directory link: $Path"
             return $true
         }
     }
@@ -387,12 +419,20 @@ $skillDirectories = @(
 Write-Host ""
 Write-Host "=== Global Skills ==="
 Write-Host "Detected skills: $($skillDirectories.Count)"
-foreach ($skill in $skillDirectories) { Write-Host " - $($skill.Name)" }
+foreach ($skill in $skillDirectories) {
+    Write-Host " - $($skill.Name)"
+}
 
 $agentSkillRoots = [ordered]@{}
-if ($codexInstalled -or $cursorInstalled) { $agentSkillRoots["Codex + Cursor"] = Join-Path $HOME ".agents\skills" }
-if ($claudeInstalled) { $agentSkillRoots["Claude Code"] = Join-Path $claudeHome "skills" }
-if ($antigravityInstalled) { $agentSkillRoots["Antigravity"] = Join-Path $antigravityConfigHome "skills" }
+if ($codexInstalled -or $cursorInstalled) {
+    $agentSkillRoots["Codex + Cursor"] = Join-Path $HOME ".agents\skills"
+}
+if ($claudeInstalled) {
+    $agentSkillRoots["Claude Code"] = Join-Path $claudeHome "skills"
+}
+if ($antigravityInstalled) {
+    $agentSkillRoots["Antigravity"] = Join-Path $antigravityConfigHome "skills"
+}
 
 $agentMemorySource = Join-Path $SkillsRoot "agent-memory"
 if (Test-Path $agentMemorySource) {
@@ -421,28 +461,46 @@ Write-Host ""
 Write-Host "=== Global Instructions + Shared Rules ==="
 if ($codexInstalled) {
     Set-ManagedInstructionBlock -AgentName "Codex" -Path (Join-Path $codexHome "AGENTS.md") -Content $managedInstruction
-} else { Write-Host "[SKIP] Codex global instruction" }
+}
+else {
+    Write-Host "[SKIP] Codex global instruction"
+}
 
 if ($cursorInstalled) {
     Remove-LegacyManagedFileIfOwned -Path (Join-Path $cursorHome "rules\ai-memory.mdc")
     Install-CursorLocalPlugin -CursorHome $cursorHome -ManifestContent $cursorPluginManifestContent -RuleContent $cursorPluginRule
-} else { Write-Host "[SKIP] Cursor global rule plugin" }
+}
+else {
+    Write-Host "[SKIP] Cursor global rule plugin"
+}
 
 if ($claudeInstalled) {
     Set-ManagedInstructionBlock -AgentName "Claude Code" -Path (Join-Path $claudeHome "CLAUDE.md") -Content $managedInstruction
-} else { Write-Host "[SKIP] Claude Code global instruction" }
+}
+else {
+    Write-Host "[SKIP] Claude Code global instruction"
+}
 
 if ($geminiInstalled -or $antigravityInstalled) {
-    $geminiAgentName = if ($geminiInstalled -and $antigravityInstalled) { "Gemini CLI + Antigravity" } elseif ($geminiInstalled) { "Gemini CLI" } else { "Antigravity" }
+    $geminiAgentName = if ($geminiInstalled -and $antigravityInstalled) {
+        "Gemini CLI + Antigravity"
+    }
+    elseif ($geminiInstalled) {
+        "Gemini CLI"
+    }
+    else {
+        "Antigravity"
+    }
+
     Set-ManagedInstructionBlock -AgentName $geminiAgentName -Path (Join-Path $geminiHome "GEMINI.md") -Content $managedInstruction
-} else { Write-Host "[SKIP] Gemini / Antigravity global instruction" }
+}
+else {
+    Write-Host "[SKIP] Gemini / Antigravity global instruction"
+}
 
 Write-Host ""
 Write-Host "=== Setup Complete ==="
 Write-Host "AI_MEMORY_HOME: $RepoRoot"
 Write-Host "Global skills: $($skillDirectories.Count)"
 Write-Host "Shared rules: $($RuleSourceNames.Count)"
-if ($cursorInstalled) {
-    Write-Host "Cursor: reload the window after setup. If the local plugin is still invisible, verify local plugin imports are allowed by Cursor/team policy."
-}
 Write-Host "Restart running agents if they do not detect the changes immediately."
