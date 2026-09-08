@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Root = $env:AI_MEMORY_HOME
 )
 
@@ -74,7 +74,7 @@ foreach ($section in @("rule", "project", "lesson", "incident")) {
     else {
         foreach ($item in $items) {
             $extra = if ($item.Project) { " | project: $($item.Project)" } else { "" }
-            [void]$builder.AppendLine("- [$($item.Id)] $($item.Title) - `$($item.Path)`$extra")
+            [void]$builder.AppendLine(("- [{0}] {1} - `{2}`{3}" -f $item.Id, $item.Title, $item.Path, $extra))
         }
     }
     [void]$builder.AppendLine("")
@@ -82,3 +82,5 @@ foreach ($section in @("rule", "project", "lesson", "incident")) {
 
 [IO.File]::WriteAllText($indexPath, $builder.ToString(), (New-Object Text.UTF8Encoding($false)))
 Write-Host "Rebuilt: $indexPath"
+
+
