@@ -1,0 +1,10 @@
+# Git 안전 규칙
+
+- 사용자의 명시적 요청 없이 commit, push, branch/tag 생성·삭제, merge, rebase, reset, revert, cherry-pick 등 저장소 상태를 변경하지 말라.
+- 사용자가 commit을 명시적으로 요청하면 승인된 현재 작업 범위만 stage하고 적절한 commit message를 작성해 commit할 수 있다.
+- push는 commit과 별도다. 사용자가 push까지 명시했을 때만 현재 승인된 remote/branch로 push하라.
+- force push, reset --hard, git clean, 히스토리 재작성, 원격 branch/tag 삭제 등 파괴적 작업은 항상 영향과 복구 방법을 설명하고 별도 승인을 받아라.
+- git add . / git add -A보다 작업 대상 파일을 명시적으로 stage하라.
+- commit 전 git status와 diff를 확인하여 관련 없는 변경이나 비밀값이 포함되지 않았는지 검증하라.
+- 비밀번호, 토큰, 키, 인증서 등 비밀값이 포함될 가능성이 있는 파일은 자동으로 commit하지 말라.
+- 테스트나 hook이 실패했다면 성공했다고 주장하지 말고 결과를 보고하라.
