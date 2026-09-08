@@ -20,7 +20,7 @@ agent_memory backfill
 |---|---|---:|---|
 | `recall` | 과거 관련 기억 조회 | X | 비단순 작업 전, 보통 자동 |
 | `remember` / `learn` | 지금 막 확인된 중요한 지식 저장 | O | 작업 도중 필요한 시점 |
-| `backfill` | 현재 세션 전체를 회고해 놓친 지식 복구 | O | 작업 완료 후 또는 과거 세션 정리 |
+| `backfill` | 현재 세션 전체를 회고해 놓친 지식 복구 + Tool 후보/개선사항 누적 | O | 작업 완료 후 또는 과거 세션 정리 |
 
 ## Backfill
 
@@ -38,11 +38,31 @@ Backfill은 현재 Agent가 접근 가능한 세션 기록을 훑어 다음을 �
 - 검증/디버깅/빌드/배포/DB/마이그레이션 노하우
 - 재사용 가능한 작업 절차와 체크리스트
 - 지속적인 미해결 위험/기술 부채
-- 반복적이고 결정적인 작업의 Tool 후보
+- 반복적이고 결정적인 작업의 신규 Tool 후보
+- 이미 존재하는 Tool/Script의 버그, 기능 부족, 경로/출력 문제 같은 개선사항
 
-모든 내용을 저장하지 않습니다. `MEMORY_POLICY.md` 기준으로 재사용 가치가 높은 것만 기존 Memory와 중복/충돌을 확인한 뒤 저장 또는 갱신합니다.
+모든 내용을 Memory에 저장하지 않습니다. `MEMORY_POLICY.md` 기준으로 재사용 가치가 높은 것만 기존 Memory와 중복/충돌을 확인한 뒤 저장 또는 갱신합니다.
 
-Tool 후보는 **발굴하고 보고만 하며 자동 구현하지 않습니다.**
+## Tool 후보 Backlog
+
+Backfill에서 Tool 관련 후보가 발견되면 구현하지 않고 다음 파일에 자동 누적합니다.
+
+```text
+TOOL_CANDIDATES.md
+```
+
+분류는 두 가지입니다.
+
+```text
+new-tool    = 새 Tool로 만들 가치가 있는 반복/대량/결정적 작업
+improvement = 기존 Tool/Script의 버그, 기능 부족, 안정성/사용성 문제
+```
+
+같거나 사실상 같은 후보가 이미 있으면 새 항목을 만들지 않고 `occurrences`, `last_seen`, 관련 프로젝트와 새로운 근거를 병합합니다.
+
+후보가 없으면 `TOOL_CANDIDATES.md`도 수정하지 않습니다.
+
+후보는 아직 실제 Tool이 아니므로 `TOOL_INDEX.md`에는 넣지 않습니다. 실제 구현과 검증이 끝난 Tool만 `TOOL_INDEX.md`에 등록합니다.
 
 세션 기록 일부가 Host Agent의 컨텍스트에서 이미 잘렸다면 보이는 범위만 Backfill하고 그 한계를 보고합니다.
 
@@ -51,6 +71,8 @@ Tool 후보는 **발굴하고 보고만 하며 자동 구현하지 않습니다.
 ```text
 SKILL.md
 references/backfill.md
+../../TOOL_CANDIDATES.md
+../../templates/TOOL_CANDIDATE_TEMPLATE.md
 ```
 
 ## 과거 세션 정리 권장 방식
@@ -71,4 +93,4 @@ agent_memory backfill
 - DB/보안
 - 여러 번 재작업한 세션
 
-단순 문법 질문, 한 줄 명령 확인, 잡담처럼 장기 지식이 거의 없는 세션은 굳이 Backfill할 필요가 없습니다.
+단순 문법 질문, 한 줄 명령 확인, 잡담처럼 장기 지식과 자동화 후보가 거의 없는 세션은 굳이 Backfill할 필요가 없습니다.
