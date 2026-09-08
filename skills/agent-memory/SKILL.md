@@ -45,6 +45,59 @@ Do not assume a fixed drive such as `E:\AI_MEMORY`.
 
 Before any write, update, promotion, archival, Learn/Remember, or Backfill operation, read `MEMORY_POLICY.md`.
 
+# Shared Memory Intelligence
+
+Recall, Remember, Backfill must use the same reasoning model. The goal is not to preserve or replay implementation history. The goal is to turn past work into compact knowledge that improves future decisions.
+
+For every candidate or recalled memory, reason through these questions:
+
+1. **Distill** — Is this durable knowledge, or merely an implementation summary/change log?
+2. **Transfer** — Can the underlying mechanism apply outside the current file/module/project?
+3. **Prevent** — What wrong assumption, failure, regression, or unsafe approach should a future Agent avoid?
+4. **Bound** — Under what conditions does the knowledge apply, and when should it not be generalized?
+5. **Verify** — Is it supported by code, config, tests, logs, official docs, or explicit user/team instruction?
+6. **Deduplicate** — Is there already a stronger equivalent memory?
+7. **Compress** — Can the useful knowledge be stated much more simply without losing safety or applicability?
+
+A strong memory usually answers, in compact form:
+
+```text
+What is the durable knowledge?
+Why does it matter?
+When does it apply?
+What should be avoided or checked?
+How was it verified?
+```
+
+## Generalization rule
+
+When a specific project incident reveals a broader engineering rule, actively check whether a separate reusable Lesson is justified.
+
+Example:
+
+```text
+Specific project memory:
+ETI LOTDEFECT has a concrete Qty double-deduction failure with known source/root cause.
+
+Transferable lesson:
+When updating quantity-bearing existing data, derived/header quantities must be checked for delta(new-old) handling instead of reapplying the full new value.
+```
+
+Store both only when they provide distinct future value. Do not duplicate the same prose into project + lesson files.
+
+## Low-value implementation history
+
+Treat these as low-value by default:
+
+- "implemented X";
+- changed-file/class lists;
+- progress/status summaries;
+- obvious current source structure with no hidden constraint;
+- successful build/test results with no reusable lesson;
+- information that Git diff/current source can cheaply reconstruct.
+
+Keep implementation facts only when they expose a non-obvious invariant, hidden behavior, dangerous boundary, important Source Navigation shortcut, or reusable design/verification knowledge.
+
 # Mode A — Recall
 
 ## When to use
@@ -70,20 +123,40 @@ The user does not need to ask for Recall explicitly.
 
 ## Recall procedure
 
-1. Identify the current repository/project, technology, module/component, requested analysis/design objective, operation, error text, and failure class where applicable.
+1. Identify the current repository/project, technology, module/component, operation, state transition, data/architecture invariant, requested objective, error/failure class, and likely regression risks.
 2. Read `memory/rules/global.md` if it exists.
-3. Check whether relevant project-scoped memory exists under `memory/projects/<project>/`.
-4. Extract a small set of discriminative search terms from the task.
+3. Check relevant current-project memory under `memory/projects/<project>/`.
+4. Extract a small set of discriminative terms from both **names** and **mechanism**. Do not search only exact class/error keywords.
 5. Search `INDEX.md` first.
 6. If needed, search memory metadata, headings, and content using `scripts/search-memory.ps1`, `rg`, or an equivalent native text search.
 7. Load only the most relevant memory files, normally no more than 3–7.
-8. Prioritize in this order:
+8. Build a small applicability set from:
    - active global rules;
    - active current-project knowledge/rules;
-   - matching lessons;
-   - matching incidents.
-9. Validate each retrieved memory against the current source/configuration before relying on it.
-10. Apply useful memory silently unless mentioning it materially helps explain a decision.
+   - transferable lessons whose mechanism matches the current work;
+   - directly matching or strongly analogous incidents.
+9. For each retrieved item, decide whether it is:
+   - **directly applicable**;
+   - **analogically reusable** after validation;
+   - **not applicable** because its conditions differ.
+10. Explicitly extract any recurrence-prevention guidance, prior wrong assumptions, dangerous shortcuts, or validation checks that could prevent repeating a past mistake.
+11. Validate relevant memory against current source/configuration/tests before relying on it.
+12. Apply useful memory silently unless mentioning it materially helps explain a decision.
+
+## Recall behavior
+
+Recall is not merely semantic search. It acts as a lightweight pre-mortem/code-review pass using prior experience.
+
+Before substantial execution, ask internally:
+
+```text
+What similar mistake has happened before?
+What reusable Lesson applies even if it came from another project?
+What hidden project constraint must not be broken?
+What assumption should be verified instead of guessed?
+```
+
+Do not force an analogy. Cross-project memory is useful only when the underlying mechanism and applicability conditions actually match.
 
 ## Recall constraints
 
@@ -126,35 +199,52 @@ When intent is ambiguous, do not write memory.
 ## Learn / Remember procedure
 
 1. Read `MEMORY_POLICY.md`.
-2. Summarize only the reusable engineering knowledge from the work or decision.
-3. Determine whether the candidate is actually worth preserving.
-4. Search existing memory before creating anything.
-5. Compare candidates using:
+2. Identify the specific knowledge the user intends to preserve.
+3. Remove implementation-log noise and isolate the durable fact, constraint, lesson, decision rationale, failure pattern, or workflow.
+4. Run the Shared Memory Intelligence checks: Distill, Transfer, Prevent, Bound, Verify, Deduplicate, Compress.
+5. Explicitly check **generalization potential**:
+   - project-only invariant/behavior;
+   - reusable lesson within similar modules;
+   - broadly reusable engineering lesson/rule.
+6. Explicitly derive **recurrence-prevention value** when relevant:
+   - what wrong assumption caused trouble;
+   - what future Agent should check first;
+   - what approach should be avoided;
+   - what verification closes the risk.
+7. Define applicability and exceptions. Do not turn one local case into a global rule without evidence.
+8. Search existing memory before creating anything.
+9. Compare candidates using:
+   - operation/state transition;
    - error/failure signature;
    - technology and module/component;
    - root cause;
-   - design/architecture constraint or decision;
-   - wrong approach or agent mistake;
+   - invariant or design constraint;
+   - wrong approach or Agent mistake;
    - correct resolution;
-   - reusable rule/pattern.
-6. If substantially the same memory already exists, update it instead of creating a duplicate.
-7. Otherwise classify and create a concise new memory using `templates/MEMORY_TEMPLATE.md`.
-8. Rebuild `INDEX.md` after a successful write/update.
-9. Report briefly what was stored or updated.
+   - reusable rule/pattern;
+   - applicability scope.
+10. If substantially the same memory already exists, update it instead of creating a duplicate.
+11. If a specific project fact and a generalized Lesson both have distinct future value, they may be stored separately, but keep each concise and avoid repeating the same content.
+12. Otherwise classify and create the smallest useful memory using `templates/MEMORY_TEMPLATE.md`.
+13. Rebuild `INDEX.md` after a successful write/update.
+14. Report briefly what was stored or updated, including whether any project-specific knowledge was generalized into a reusable Lesson.
 
 ## What is usually worth storing
 
 - a verified, non-obvious root cause;
-- a meaningful agent mistake or unsafe assumption that should not recur;
+- a meaningful Agent mistake or unsafe assumption that should not recur;
 - a reusable debugging/build/deployment/database sequence;
 - a verified architecture/design constraint or decision that is likely to matter again;
 - an important project invariant, boundary, or prohibition;
 - a repeated failure pattern likely to recur;
+- a transferable pattern discovered from a specific project incident;
 - a correction to an existing memory that was incomplete or wrong.
 
 ## What should not be stored
 
 - trivial successful work;
+- implementation summaries with no reusable knowledge;
+- file/class change lists;
 - generic programming syntax/reference knowledge;
 - temporary session state;
 - raw conversation transcripts;
@@ -183,34 +273,40 @@ The Backfill invocation itself is explicit permission to persist selected reusab
 
 1. Read `MEMORY_POLICY.md` and `references/backfill.md`.
 2. Determine how much of the current session/history is actually available to the host Agent. If earlier context is unavailable or truncated, report that limitation and never invent missing history.
-3. Review the available session retrospectively and extract candidates from these areas:
+3. Review the available session retrospectively, but do **not** start by summarizing what was implemented.
+4. Run the same Shared Memory Intelligence checks used by Remember across the session's candidate knowledge.
+5. Prioritize:
    - meaningful mistakes, wrong assumptions, failed edits, rework, and recurrence-prevention rules;
    - verified root causes and correct resolutions;
    - project invariants, hidden constraints, boundaries, dependencies, and dangerous-to-change behavior;
    - architecture/design decisions, selected approaches, rejected alternatives, and the reasons;
    - effective debugging, verification, build, deployment, DB, migration, or test sequences;
+   - transferable lessons that can be generalized beyond the original project;
    - reusable procedures and safety checklists;
    - durable unresolved risks or technical debt that future work must know;
    - repeated deterministic work that may be a new Tool candidate;
    - bugs, limitations, path/output issues, or usability problems in an existing Tool/Script that should be classified as an improvement instead of a new Tool.
-4. Prefer final verified outcomes over intermediate guesses. Preserve a wrong approach only when remembering why it was wrong would prevent recurrence.
-5. Validate important Memory candidates against current source/configuration/tests when practical. Do not promote unverified claims into durable rules.
-6. Search existing memory before writing anything and merge near-duplicates instead of creating parallel memories.
-7. Classify and write only durable, reusable Memory knowledge using the existing memory schema/template.
-8. If Tool candidates or Tool/Script improvements were found, read `TOOL_CANDIDATES.md`, deduplicate by purpose/target/problem, and update the shared backlog according to `references/backfill.md` and `templates/TOOL_CANDIDATE_TEMPLATE.md`.
-9. Rebuild `INDEX.md` only after successful Memory changes. Tool candidate backlog changes do not require rebuilding the Memory index.
-10. Report briefly:
+6. Treat plain implementation summaries/change logs as low-value and normally discard them unless they encode a hidden invariant, important navigation map, or future decision constraint.
+7. Prefer final verified outcomes over intermediate guesses. Preserve a wrong approach only when remembering why it was wrong would prevent recurrence.
+8. Validate important Memory candidates against current source/configuration/tests when practical. Do not promote unverified claims into durable rules.
+9. Search existing memory before writing anything and merge near-duplicates instead of creating parallel memories.
+10. Classify and write only durable, reusable Memory knowledge using the existing memory schema/template.
+11. If Tool candidates or Tool/Script improvements were found, read `TOOL_CANDIDATES.md`, deduplicate by purpose/target/problem, and update the shared backlog according to `references/backfill.md` and `templates/TOOL_CANDIDATE_TEMPLATE.md`.
+12. Rebuild `INDEX.md` only after successful Memory changes. Tool candidate backlog changes do not require rebuilding the Memory index.
+13. Report briefly:
    - newly stored memories;
    - updated/deduplicated memories;
+   - generalized reusable lessons;
    - recurrence-prevention rules or important project constraints discovered;
    - new Tool candidates and Tool/Script improvements;
    - whether each Tool backlog item was newly added or merged into an existing item;
-   - notable items intentionally skipped and why;
+   - notable implementation-summary items intentionally skipped;
    - any session-history coverage limitation.
 
 ## Backfill constraints
 
 - Do not save a session summary just because the session was long.
+- Do not use implementation completion as the main organizing structure.
 - Do not save raw conversation or raw logs.
 - Do not store every decision; retain only decisions likely to affect future work.
 - Do not store temporary progress/status that becomes stale immediately.
@@ -229,7 +325,7 @@ The Backfill invocation itself is explicit permission to persist selected reusab
 Use the narrowest appropriate category.
 
 - `rule`: verified durable instruction that should constrain future work repeatedly.
-- `lesson`: reusable problem-solving knowledge or engineering pattern.
+- `lesson`: reusable problem-solving, prevention, validation, or engineering pattern.
 - `incident`: a concrete failure and its verified root cause/resolution.
 - `project`: knowledge valid only for a specific project/repository.
 
@@ -244,7 +340,7 @@ If one exists:
 - update the existing file;
 - increment `occurrences` when the schema contains it;
 - refresh `last_seen` / `updated` where applicable;
-- add only genuinely new evidence, constraints, or a better solution;
+- add only genuinely new evidence, applicability constraints, recurrence-prevention guidance, or a better solution;
 - do not create parallel versions of the same lesson.
 
 Do not rewrite unrelated memory files.
@@ -278,4 +374,4 @@ Tool candidate backlog:
 - `TOOL_CANDIDATES.md`
 - `templates/TOOL_CANDIDATE_TEMPLATE.md`
 
-Keep each memory compact enough to recognize the situation and safely reuse the lesson without replaying the original conversation.
+Keep each memory compact enough to recognize the situation, understand its applicability, avoid prior mistakes, and safely reuse the lesson without replaying the original conversation.
