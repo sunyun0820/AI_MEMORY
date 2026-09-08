@@ -172,6 +172,29 @@ function Test-TextFileMatches {
     else { Write-DoctorResult FAIL "$Label differs from AI_MEMORY source; run setup.ps1" }
 }
 
+function Test-SkillCopy {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$SourcePath,
+        [Parameter(Mandatory = $true)][string]$DestinationPath
+    )
+
+    if (-not (Test-Path $DestinationPath -PathType Container)) {
+        Write-DoctorResult FAIL "$Label missing: $DestinationPath"
+        return
+    }
+
+    $item = Get-Item $DestinationPath -Force
+    if ($item.LinkType -eq "Junction" -or $item.LinkType -eq "SymbolicLink") {
+        Write-DoctorResult FAIL "$Label is a link; rerun setup.ps1 so the agent gets real files: $DestinationPath"
+        return
+    }
+
+    $sourceSkill = Join-Path $SourcePath "SKILL.md"
+    $destinationSkill = Join-Path $DestinationPath "SKILL.md"
+    Test-TextFileMatches -Label "$Label SKILL.md matches source" -ActualPath $destinationSkill -ExpectedPath $sourceSkill
+}
+
 function Test-ManagedInstruction {
     param(
         [Parameter(Mandatory = $true)][string]$AgentName,
@@ -334,37 +357,43 @@ $codexHome = if (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { $env:CODE
 $claudeHome = if (-not [string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR)) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME ".claude" }
 $cursorHome = Join-Path $HOME ".cursor"
 $geminiHome = Join-Path $HOME ".gemini"
-$antigravityConfigHome = Join-Path $geminiHome "config"
+$antigravityIdeHome = Join-Path $geminiHome "antigravity"
+$antigravityCliHome = Join-Path $geminiHome "antigravity-cli"
+$antigravityLegacyConfigHome = Join-Path $geminiHome "config"
 
 $codexEvidence = @((Join-Path $codexHome "config.toml"))
 $claudeEvidence = @((Join-Path $claudeHome "settings.json"))
 $cursorEvidence = @()
 $geminiEvidence = @((Join-Path $geminiHome "settings.json"))
-$antigravityEvidence = @((Join-Path $geminiHome "antigravity"), (Join-Path $geminiHome "antigravity-cli\settings.json"))
+$antigravityIdeEvidence = @($antigravityIdeHome)
+$antigravityCliEvidence = @((Join-Path $antigravityCliHome "settings.json"))
 
 if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
     $cursorEvidence += (Join-Path $env:LOCALAPPDATA "Programs\cursor\Cursor.exe")
-    $antigravityEvidence += (Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe")
-    $antigravityEvidence += (Join-Path $env:LOCALAPPDATA "Programs\Antigravity\Antigravity.exe")
+    $antigravityIdeEvidence += (Join-Path $env:LOCALAPPDATA "Programs\Antigravity\Antigravity.exe")
+    $antigravityCliEvidence += (Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe")
 }
 if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
     $cursorEvidence += (Join-Path $env:ProgramFiles "Cursor\Cursor.exe")
-    $antigravityEvidence += (Join-Path $env:ProgramFiles "Google\antigravity-cli\agy.exe")
-    $antigravityEvidence += (Join-Path $env:ProgramFiles "Antigravity\Antigravity.exe")
+    $antigravityIdeEvidence += (Join-Path $env:ProgramFiles "Antigravity\Antigravity.exe")
+    $antigravityCliEvidence += (Join-Path $env:ProgramFiles "Google\antigravity-cli\agy.exe")
 }
 
 $codexInstalled = Test-AgentInstalled -Commands @("codex") -EvidencePaths $codexEvidence
 $cursorInstalled = Test-AgentInstalled -Commands @("cursor", "agent") -EvidencePaths $cursorEvidence
 $claudeInstalled = Test-AgentInstalled -Commands @("claude") -EvidencePaths $claudeEvidence
 $geminiInstalled = Test-AgentInstalled -Commands @("gemini") -EvidencePaths $geminiEvidence
-$antigravityInstalled = Test-AgentInstalled -Commands @("agy") -EvidencePaths $antigravityEvidence
+$antigravityIdeInstalled = Test-AgentInstalled -EvidencePaths $antigravityIdeEvidence
+$antigravityCliInstalled = Test-AgentInstalled -Commands @("agy") -EvidencePaths $antigravityCliEvidence
+$antigravityInstalled = $antigravityIdeInstalled -or $antigravityCliInstalled
 
 $agentStatus = [ordered]@{
     "Codex" = $codexInstalled
     "Cursor" = $cursorInstalled
     "Claude Code" = $claudeInstalled
     "Gemini CLI" = $geminiInstalled
-    "Antigravity" = $antigravityInstalled
+    "Antigravity IDE" = $antigravityIdeInstalled
+    "Antigravity CLI" = $antigravityCliInstalled
 }
 foreach ($agent in $agentStatus.GetEnumerator()) {
     if ($agent.Value) { Write-DoctorResult OK "$($agent.Key) detected" }
@@ -372,7 +401,7 @@ foreach ($agent in $agentStatus.GetEnumerator()) {
 }
 
 Write-Host ""
-Write-Host "=== Skill Links ==="
+Write-Host "=== Skill Deployment ==="
 if ($codexInstalled -or $cursorInstalled) {
     foreach ($skill in $skillDirectories) {
         Test-Link -Label "Codex + Cursor skill $($skill.Name)" -LinkPath (Join-Path $HOME ".agents\skills\$($skill.Name)") -TargetPath $skill.FullName
@@ -385,10 +414,40 @@ if ($claudeInstalled) {
 }
 else { Write-DoctorResult SKIP "Claude Code skill checks" }
 
-if ($antigravityInstalled) {
-    foreach ($skill in $skillDirectories) { Test-Link -Label "Antigravity skill $($skill.Name)" -LinkPath (Join-Path $antigravityConfigHome "skills\$($skill.Name)") -TargetPath $skill.FullName }
+if ($geminiInstalled) {
+    foreach ($skill in $skillDirectories) { Test-SkillCopy -Label "Gemini CLI skill $($skill.Name)" -SourcePath $skill.FullName -DestinationPath (Join-Path $geminiHome "skills\$($skill.Name)") }
 }
-else { Write-DoctorResult SKIP "Antigravity skill checks" }
+else { Write-DoctorResult SKIP "Gemini CLI skill checks" }
+
+if ($antigravityIdeInstalled) {
+    foreach ($skill in $skillDirectories) { Test-SkillCopy -Label "Antigravity IDE skill $($skill.Name)" -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityIdeHome "skills\$($skill.Name)") }
+    Write-Host "[INFO] Antigravity IDE should show agent-memory under Global Skills after restart/reload."
+}
+else { Write-DoctorResult SKIP "Antigravity IDE skill checks" }
+
+if ($antigravityCliInstalled) {
+    foreach ($skill in $skillDirectories) { Test-SkillCopy -Label "Antigravity CLI skill $($skill.Name)" -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityCliHome "skills\$($skill.Name)") }
+}
+else { Write-DoctorResult SKIP "Antigravity CLI skill checks" }
+
+foreach ($skill in $skillDirectories) {
+    $legacySkill = Join-Path $antigravityLegacyConfigHome "skills\$($skill.Name)"
+    if (Test-Path $legacySkill) {
+        Write-DoctorResult WARN "Legacy Antigravity skill path still exists and may be ignored by current IDE/CLI: $legacySkill"
+    }
+}
+
+$legacyAntigravityAgents = Join-Path $antigravityLegacyConfigHome "AGENTS.md"
+if (Test-Path $legacyAntigravityAgents -PathType Leaf) {
+    $legacyContent = [string](Get-Content $legacyAntigravityAgents -Raw -Encoding UTF8)
+    if ($legacyContent.Contains($ManagedStart) -and $legacyContent.Contains($ManagedEnd)) {
+        Write-DoctorResult FAIL "Legacy AI_MEMORY-managed Antigravity AGENTS.md still exists; run setup.ps1: $legacyAntigravityAgents"
+    }
+    else {
+        Write-DoctorResult WARN "Legacy Antigravity config AGENTS.md exists. Confirm it does not duplicate ~/.gemini/GEMINI.md: $legacyAntigravityAgents"
+    }
+}
+else { Write-DoctorResult OK "No legacy Antigravity config AGENTS.md duplicate" }
 
 Write-Host ""
 Write-Host "=== Global Instructions + Shared Rules ==="
@@ -430,6 +489,7 @@ if (-not [string]::IsNullOrWhiteSpace($expectedManagedInstruction)) {
     if ($geminiInstalled -or $antigravityInstalled) {
         $geminiAgentName = if ($geminiInstalled -and $antigravityInstalled) { "Gemini CLI + Antigravity" } elseif ($geminiInstalled) { "Gemini CLI" } else { "Antigravity" }
         Test-ManagedInstruction -AgentName $geminiAgentName -Path (Join-Path $geminiHome "GEMINI.md") -ExpectedContent $expectedManagedInstruction
+        if ($antigravityIdeInstalled) { Write-Host "[INFO] Expected Antigravity IDE Rules UI: one global user rule backed by ~/.gemini/GEMINI.md." }
     }
     else { Write-DoctorResult SKIP "Gemini / Antigravity global instruction" }
 }
