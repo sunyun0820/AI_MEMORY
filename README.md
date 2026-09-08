@@ -93,7 +93,7 @@ canonical rules
              └─ engineering-principles.mdc
 ```
 
-Cursor에서는 `agent-memory` Skill이 Memory Recall/Learn 동작을 담당하고, 공용 안전 Rule 3개는 local plugin의 독립된 `alwaysApply` Rule 3개로 배포합니다.
+Cursor에서는 `agent-memory` Skill이 Memory Recall/Learn/Backfill 동작을 담당하고, 공용 안전 Rule 3개는 local plugin의 독립된 `alwaysApply` Rule 3개로 배포합니다.
 
 따라서 Cursor `Customize → Plugins`에는 **Ai Memory 플러그인 1개**가 보이는 것이 정상이고, `Customize → Rules`에는 AI_MEMORY가 제공하는 **Rule 3개**가 별도로 보여야 정상입니다.
 
@@ -175,7 +175,9 @@ Import 후에는 새로 생긴 `skills/*`를 검토하고 Git에 반영한 다�
    ↓
 결과 판단
    ↓
-사용자가 명시적으로 요청한 경우에만 Memory Learn
+명시 요청 시 현재 지식은 Learn/Remember
+또는
+명시 요청 시 세션 전체 회고는 Backfill
 ```
 
 ## Memory 원칙
@@ -184,11 +186,31 @@ Import 후에는 새로 생긴 `skills/*`를 검토하고 Git에 반영한 다�
 
 과거 프로젝트 경험이 현재 판단에 도움 될 가능성이 있는 비단순 엔지니어링 작업에서는 관련 Memory를 선택적으로 조회합니다. 전체 Memory를 매번 읽지 않습니다.
 
-### Learn = 사용자 명시 요청
+### Learn / Remember = 사용자 명시 요청
+
+작업 도중 지금 막 확인된 중요한 지식 하나 또는 몇 개를 저장/갱신하는 모드입니다.
 
 작업 완료 자체는 Memory 저장 권한이 아닙니다. `기억해`, `메모리에 남겨`, `저장해`, `업데이트해`처럼 사용자가 명시적으로 요청한 경우에만 저장/갱신합니다.
 
-세부 기준은 `MEMORY_POLICY.md`를 따릅니다.
+### Backfill = 사용자 명시 요청
+
+완료되었거나 충분히 진행된 현재 세션을 전체적으로 회고해서 실시간 Learn/Remember에서 놓친 재사용 지식을 복구하는 모드입니다.
+
+실수/시행착오, 재발 방지 규칙, 프로젝트 로직/제약, 설계 결정과 폐기안, 검증/디버깅 절차, 재사용 작업 순서, 지속적 위험, Tool 후보까지 확인합니다. 모든 내용을 저장하지 않고 `MEMORY_POLICY.md` 기준으로 가치 있는 내용만 중복/충돌 확인 후 저장합니다.
+
+Tool 후보는 Backfill에서 발굴/보고만 하며 자동 구현하지 않습니다.
+
+권장 호출:
+
+```text
+agent_memory recall
+agent_memory remember
+agent_memory backfill
+```
+
+`agent-memory`처럼 하이픈으로 적어도 됩니다. 자세한 사용법은 `skills/agent-memory/README.md`와 `skills/agent-memory/references/backfill.md`를 참고합니다.
+
+세부 저장 기준은 `MEMORY_POLICY.md`를 따릅니다.
 
 # Tool 원칙
 
