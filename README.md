@@ -4,9 +4,9 @@ Codex, Cursor, Claude Code, Gemini/Antigravity 등 여러 개발 에이전트가
 
 ## 목표
 
-1. 과거 작업의 중요한 규칙, 실수, 장애 원인, 해결 패턴, 설계 제약을 다음 작업에서 다시 활용합니다.
-2. 반복적이고 기계적인 작업은 검증된 Tool로 실행하여 작업 속도를 높이고 Agent의 불필요한 추론/토큰 사용을 줄입니다.
-3. 여러 PC와 여러 Agent에서 최대한 동일한 작업 환경을 `git clone + setup.ps1`로 재현합니다.
+1. 과거 작업의 중요한 규칙, 실수, 장애 원인, 해결 패턴, 설계 제약을 다음 작업에서 재사용합니다.
+2. 반복적이고 기계적인 작업은 검증된 Tool로 실행하여 속도와 토큰 사용량을 줄입니다.
+3. 여러 PC와 여러 Agent에서 최대한 동일한 환경을 `git clone + setup.ps1`로 재현합니다.
 4. DB/Git/엔지니어링 같은 공통 안전 규칙은 Agent별로 복붙하지 않고 AI_MEMORY 한 곳에서 관리합니다.
 
 ## 핵심 구조
@@ -38,7 +38,6 @@ AI_MEMORY/
 │        └─ ai-memory.mdc
 │
 ├─ skills/
-│  ├─ README.md
 │  └─ agent-memory/
 │     └─ SKILL.md
 │
@@ -50,25 +49,8 @@ AI_MEMORY/
 │  └─ archive/
 │
 ├─ tools/
-│  ├─ README.md
-│  ├─ common/
-│  ├─ filesystem/
-│  ├─ git/
-│  ├─ java/
-│  ├─ dotnet/
-│  ├─ database/
-│  ├─ build/
-│  └─ web/
-│
 ├─ templates/
-│  ├─ MEMORY_TEMPLATE.md
-│  └─ TOOL_TEMPLATE.md
-│
 └─ scripts/
-   ├─ search-memory.ps1
-   ├─ rebuild-index.ps1
-   ├─ search-tools.ps1
-   └─ rebuild-tool-index.ps1
 ```
 
 ## 역할 구분
@@ -82,16 +64,7 @@ memory       = 과거 작업에서 무엇을 배웠는지 저장
 tools        = 반복 작업을 실제 스크립트/프로그램으로 실행
 ```
 
-각 영역을 섞지 않습니다.
-
-- 업무 경험/오류 원인 → `memory/`
-- Agent Workflow → `skills/`
-- AI_MEMORY Recall/Learn/Tool 사용 원칙 → `instructions/`
-- 모든 Agent 공통 안전·행동 규칙 → `rules/`
-- Agent별 포맷/설치 차이 → `adapters/`
-- 반복 실행 가능한 자동화 → `tools/`
-
-`memory/rules/`는 과거 작업에서 학습한 규칙을 저장하는 Memory 분류이고, 루트의 `rules/`는 모든 Agent에 항상 배포되는 전역 Rule이므로 역할이 다릅니다.
+`memory/rules/`는 과거 작업에서 학습한 규칙을 저장하는 Memory 분류이고, 루트의 `rules/`는 모든 Agent에 항상 배포되는 전역 Rule입니다.
 
 # Shared Rules
 
@@ -103,7 +76,7 @@ rules/git-safety.md
 rules/engineering-principles.md
 ```
 
-`rules/RULES.md`는 위 세 파일을 합친 배포용 aggregator입니다.
+`rules/RULES.md`는 위 세 파일을 합친 배포용 aggregator이며 직접 수정하지 않습니다.
 
 ```text
 canonical rules
@@ -112,10 +85,10 @@ rules/RULES.md
       ↓
 GLOBAL_AGENT_INSTRUCTIONS.md 와 결합
       ↓
-Agent별 adapter/전역 지침으로 배포
+Agent별 전역 지침/adapter로 배포
 ```
 
-`RULES.md`는 직접 수정하지 않습니다. canonical rule 파일을 수정한 뒤 `setup.ps1`을 실행하면 자동으로 재생성됩니다.
+Rule을 수정한 뒤 `setup.ps1`을 실행하면 aggregator와 Agent별 배포본이 갱신됩니다.
 
 # Agent 기본 흐름
 
@@ -124,19 +97,13 @@ Agent별 adapter/전역 지침으로 배포
    ↓
 공용 Rule 적용
    ↓
-비단순 분석/설계/개발 작업인가?
-   ↓ YES
-관련 Memory Recall
+비단순 엔지니어링 작업이면 관련 Memory Recall
    ↓
 필요한 Skill 적용
    ↓
-반복/대량/기계적 작업이 있는가?
-   ↓ YES
-TOOL_INDEX에서 기존 Tool 검색
+반복/대량/결정적 작업이면 TOOL_INDEX 검색
    ↓
-적합한 Tool이 있으면 TOOL.md 확인 후 실행
-   ↓
-없으면 Agent가 직접 수행
+적합한 Tool 실행
    ↓
 결과 판단
    ↓
@@ -149,25 +116,13 @@ TOOL_INDEX에서 기존 Tool 검색
 
 과거 프로젝트 경험이 현재 판단에 도움 될 가능성이 있는 비단순 엔지니어링 작업에서는 관련 Memory를 선택적으로 조회합니다.
 
-대표 대상:
-
-- 시스템/소스/문제 분석
-- 기능/API/아키텍처/DB 설계
-- 기술 의사결정과 영향 분석
-- 구현/디버깅/리팩터링/코드 리뷰
-- 마이그레이션
-- 빌드/배포
-- DB 작업
-- 보안 검토
-- 반복되는 장애/운영 작업
-
 전체 Memory를 매번 읽지 않습니다.
 
 ### Learn = 사용자 명시 요청
 
 작업 완료 자체는 Memory 저장 권한이 아닙니다.
 
-예:
+다음처럼 사용자가 명시했을 때만 저장/갱신합니다.
 
 ```text
 "이거 기억해"
@@ -176,13 +131,11 @@ TOOL_INDEX에서 기존 Tool 검색
 "이 실수 학습해"
 ```
 
-처럼 사용자가 명시했을 때만 저장/갱신합니다.
-
-세부 기준은 [`MEMORY_POLICY.md`](./MEMORY_POLICY.md)를 따릅니다.
+세부 기준은 `MEMORY_POLICY.md`를 따릅니다.
 
 # Tool 원칙
 
-반복적·대량·결정적·기계적인 작업에서는 AI가 동일 절차를 매번 다시 수행하기 전에 [`TOOL_INDEX.md`](./TOOL_INDEX.md)를 확인합니다.
+반복적·대량·결정적·기계적인 작업에서는 `TOOL_INDEX.md`를 먼저 확인합니다.
 
 ```text
 TOOL_INDEX.md
@@ -198,18 +151,16 @@ Tool 실행
 요약 결과만 Agent가 분석
 ```
 
-전체 `tools/` 디렉터리를 컨텍스트에 넣지 않습니다.
+Tool의 `safety`는 다음 네 값 중 하나입니다.
 
-## Safety 등급
-
-- `read-only`: 조회만 수행
-- `write-local`: 로컬 파일 생성/수정
-- `destructive`: 삭제/reset/대량 변경 등 영향이 큰 로컬 작업
-- `external`: DB 쓰기, 배포, Git push, API 변경, 메일 등 외부 상태 변경
+- `read-only`
+- `write-local`
+- `destructive`
+- `external`
 
 Tool이 존재한다는 사실 자체는 `destructive` 또는 `external` 작업의 실행 권한을 의미하지 않습니다.
 
-# 최초 설치
+# 설치
 
 ```powershell
 git clone https://github.com/sunyun0820/AI_MEMORY.git E:\AI_MEMORY
@@ -219,41 +170,30 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\doctor.ps1
 ```
 
-Repository 위치는 `E:\AI_MEMORY`로 고정되지 않습니다. `setup.ps1`이 현재 Repository 위치를 자동으로 사용합니다.
+Repository 위치는 고정되지 않습니다. `setup.ps1`이 현재 Repository 위치를 `AI_MEMORY_HOME`으로 등록합니다.
 
 ## setup.ps1 동작
 
-1. 현재 Repository를 `AI_MEMORY_HOME` 사용자 환경변수에 등록합니다.
-2. canonical shared rules 3개를 읽어 `rules/RULES.md`를 재생성합니다.
-3. `GLOBAL_AGENT_INSTRUCTIONS.md + RULES.md`를 결합합니다.
-4. Cursor용 `.mdc` adapter를 재생성합니다.
-5. 설치된 Agent를 감지합니다.
-6. 공용 Skill을 지원되는 Agent 위치에 junction으로 연결합니다.
-7. Agent별 전역 지침/adapter를 배포합니다.
-8. 기존 Agent별 사용자 지침은 삭제하지 않습니다.
+1. `AI_MEMORY_HOME` 등록
+2. canonical shared rules 3개 검증
+3. `rules/RULES.md` 재생성
+4. `GLOBAL_AGENT_INSTRUCTIONS.md + RULES.md` 결합
+5. 설치된 Agent 감지
+6. 공용 Skill 연결
+7. Agent별 전역 지침/adapter 배포
+8. 기존 사용자 지침은 가능한 범위에서 보존
 
-### 전역 배포 위치
+## 전역 배포 위치
 
 ```text
 Codex       → ~/.codex/AGENTS.md
-Cursor      → ~/.cursor/plugins/local/ai-memory
 Claude Code → ~/.claude/CLAUDE.md
 Gemini CLI  → ~/.gemini/GEMINI.md
 Antigravity → ~/.gemini/GEMINI.md
+Cursor      → ~/.cursor/plugins/local/ai-memory
 ```
 
-Cursor는 home-level `.cursor/rules` 직접 로딩에 의존하지 않고, Repository의 `adapters/cursor-plugin`을 **local Cursor Plugin**으로 연결합니다.
-
-```text
-~/.cursor/plugins/local/ai-memory
-        ↓ junction
-AI_MEMORY/adapters/cursor-plugin
-        └─ rules/ai-memory.mdc
-```
-
-기존 `~/.cursor/rules/ai-memory.mdc`가 과거 AI_MEMORY가 생성한 managed 파일이면 `setup.ps1`이 정리합니다.
-
-Codex/Claude/Gemini의 기존 사용자 지침은 그대로 유지하고 다음 관리 블록만 추가 또는 갱신합니다.
+Codex/Claude/Gemini 계열은 기존 파일 안에 다음 관리 블록만 추가 또는 갱신합니다.
 
 ```text
 <!-- AI_MEMORY_MANAGED_START -->
@@ -261,17 +201,49 @@ Codex/Claude/Gemini의 기존 사용자 지침은 그대로 유지하고 다음 
 <!-- AI_MEMORY_MANAGED_END -->
 ```
 
-### 전역 Skill
+# Cursor 배포 방식
 
-`skills/*/SKILL.md`를 자동 탐색하고 설치된 Agent에 연결합니다.
+Cursor는 일반적인 `~/.cursor/rules/*.mdc`를 모든 프로젝트의 전역 Rule로 안정적으로 로딩하는 방식에 의존하지 않습니다.
+
+AI_MEMORY는 Cursor 전역 Rule을 **local Cursor Plugin**으로 배포합니다.
+
+중요: Cursor 최신 빌드에서는 `~/.cursor/plugins/local/` 바깥을 가리키는 symlink/junction이 로드되지 않는 사례가 있으므로, `setup.ps1`은 plugin을 junction으로 연결하지 않고 다음 위치에 **실제 파일로 복사**합니다.
 
 ```text
-Codex + Cursor → ~/.agents/skills/<skill-name>
-Claude Code    → ~/.claude/skills/<skill-name>
-Antigravity    → ~/.gemini/config/skills/<skill-name>
+~/.cursor/plugins/local/ai-memory/
+├─ .cursor-plugin/
+│  └─ plugin.json
+└─ rules/
+   └─ ai-memory.mdc
 ```
 
-Skill 원본은 이 Repository의 `skills/` 한 곳에서 관리합니다.
+원본은 계속 다음 위치에서 관리합니다.
+
+```text
+AI_MEMORY/adapters/cursor-plugin/
+```
+
+따라서 Rule 변경 또는 `git pull` 후에는 `setup.ps1`을 다시 실행해야 Cursor 배포본이 동기화됩니다.
+
+```powershell
+git pull
+.\setup.ps1
+.\doctor.ps1
+```
+
+그 후 Cursor에서 `Developer: Reload Window`를 실행합니다.
+
+### Cursor plugin이 Customize에 보이지 않을 때
+
+다음을 확인합니다.
+
+1. `Settings → Agents → Include Third-Party Plugins, Skills, and Other Configs`가 ON인지 확인
+2. `~/.cursor/plugins/local/ai-memory/.cursor-plugin/plugin.json`이 실제 파일인지 확인
+3. `Developer: Reload Window` 실행
+4. Teams/Enterprise 계정이면 조직 관리자가 **Allow Local Plugin Imports**를 허용했는지 확인
+5. 그래도 안 보이면 `Developer: Toggle Developer Tools → Console`에서 `plugin` 관련 오류 확인
+
+조직 정책이 local plugin import를 막고 있으면 파일이 정상이어도 Cursor가 해당 폴더를 무시할 수 있습니다.
 
 # Doctor
 
@@ -284,15 +256,15 @@ Doctor는 다음을 검사합니다.
 - 필수 Repository 구조
 - `AI_MEMORY_HOME`
 - Shared Rule 3개 존재/비어있지 않음
-- `rules/RULES.md`가 canonical source와 정확히 일치하는지
-- Cursor plugin adapter `.mdc`가 현재 원본과 정확히 일치하는지
+- `rules/RULES.md`가 canonical source와 일치하는지
+- Cursor adapter 원본이 최신인지
 - Agent 감지
 - Skill junction 대상
-- Cursor local plugin junction 대상
-- Codex/Claude/Gemini managed block 존재 여부
-- **배포된 managed block 내용이 현재 AI_MEMORY 원본과 정확히 일치하는지**
+- Codex/Claude/Gemini managed block 내용 일치 여부
+- Cursor local plugin이 **junction이 아닌 실제 폴더**인지
+- Cursor local plugin의 manifest/rule 복사본이 AI_MEMORY 원본과 일치하는지
 
-즉 파일만 존재한다고 PASS 처리하지 않고, stale rule/instruction도 FAIL로 판정합니다.
+Doctor는 Cursor 애플리케이션 내부의 조직 정책까지 판정하지는 못합니다. 파일 검증이 PASS인데 Customize에 plugin이 없다면 Cursor의 local plugin import 설정/조직 정책/클라이언트 로딩 문제를 확인해야 합니다.
 
 # 다른 PC에서 사용
 
@@ -313,17 +285,15 @@ git pull
 .\doctor.ps1
 ```
 
-나중에 새로운 Agent를 설치했다면 `setup.ps1`만 다시 실행하면 새로 감지된 Agent에 공용 설정이 추가됩니다.
+새 Agent를 설치한 뒤에도 `setup.ps1`을 다시 실행하면 감지된 Agent에 공용 설정이 추가됩니다.
 
 # Git 운영
 
-Memory, Skill, Tool, 공용 Rule, 전역 지침은 Git을 통해 동기화하고 변경 이력을 관리합니다.
+Memory, Skill, Tool, 공용 Rule, 전역 지침은 Git으로 동기화하고 변경 이력을 관리합니다.
 
 AI가 Memory를 작성했다고 해서 commit/push까지 자동 수행하는 것을 기본 동작으로 두지는 않습니다. Git 작업은 `rules/git-safety.md`를 따릅니다.
 
 # 현재 단계
-
-현재 구조는 의도적으로 단순하게 유지합니다.
 
 ```text
 Markdown
@@ -336,4 +306,4 @@ Markdown
 + Shared Agent Tools
 ```
 
-Memory/Tool 규모가 충분히 커져 Markdown 색인과 텍스트 검색이 비효율적이 되는 시점에 SQLite FTS 또는 Vector Search 같은 검색 계층을 추가할 수 있습니다.
+Memory/Tool 규모가 커져 Markdown 색인과 텍스트 검색이 비효율적이 되는 시점에 SQLite FTS 또는 Vector Search 같은 검색 계층을 추가할 수 있습니다.
