@@ -1,18 +1,37 @@
 ---
 name: agent-memory
-description: Shared engineering memory for coding agents. Automatically use Recall mode before non-trivial analysis, design, architecture, coding, debugging, review, refactoring, migration, build/deployment, database, security, or existing-codebase work when past rules, project knowledge, lessons, incidents, or prior mistakes may help. Use Learn/write mode only when the user explicitly asks to remember, save, learn, update memory, 기록해, 기억해, 메모리에 남겨, 저장해, 업데이트해, or otherwise requests persistence.
+description: Shared engineering memory for coding agents. Automatically use Recall mode before non-trivial analysis, design, architecture, coding, debugging, review, refactoring, migration, build/deployment, database, security, or existing-codebase work when past rules, project knowledge, lessons, incidents, or prior mistakes may help. Use Learn/Remember mode only when the user explicitly asks to remember, save, learn, update memory, 기록해, 기억해, 메모리에 남겨, 저장해, 업데이트해, or otherwise requests targeted persistence. Use Backfill mode only when the user explicitly asks to retrospectively review the current session/history and persist reusable knowledge, for example `agent_memory backfill`, `agent-memory backfill`, `이 세션 백필해`, or `이 세션 회고해서 기억 반영해`.
 ---
 
 # Agent Memory
 
 Use the shared `AI_MEMORY` repository as selective long-term engineering memory.
 
-This skill has two distinct modes:
+This skill has three distinct modes:
 
 - **Recall**: automatic when relevant before substantial engineering analysis, design, or execution.
-- **Learn**: manual only; requires an explicit user request to persist or update knowledge.
+- **Learn / Remember**: manual only; targeted persistence of important knowledge discovered during the current work.
+- **Backfill**: manual only; retrospective review of the current session/history to recover reusable knowledge that was not stored while the work was happening.
 
 Never treat task completion by itself as permission to write memory.
+
+## Invocation
+
+Recommended plain-text calls that work consistently across Agents:
+
+```text
+agent_memory recall
+agent_memory remember
+agent_memory backfill
+```
+
+`agent-memory` with a hyphen is also acceptable. Natural-language equivalents are valid when intent is clear.
+
+- `recall`: normally automatic, but can be requested explicitly.
+- `remember` / `learn`: save or update a specific piece of current knowledge.
+- `backfill`: review the available current session/history, select durable knowledge, deduplicate it against existing memory, and persist only worthwhile items.
+
+Backfill is intentionally broader than Remember. For the detailed Backfill checklist, read `references/backfill.md` only when Backfill mode is invoked.
 
 ## Resolve memory home
 
@@ -24,7 +43,7 @@ Resolve the memory repository in this order:
 
 Do not assume a fixed drive such as `E:\AI_MEMORY`.
 
-Before any write, update, promotion, or archival operation, read `MEMORY_POLICY.md`.
+Before any write, update, promotion, archival, Learn/Remember, or Backfill operation, read `MEMORY_POLICY.md`.
 
 # Mode A — Recall
 
@@ -74,14 +93,16 @@ The user does not need to ask for Recall explicitly.
 - Do not create a memory merely because Recall found nothing.
 - Do not block the user's task if shared memory is unavailable.
 
-# Mode B — Learn
+# Mode B — Learn / Remember
 
 ## Entry condition
 
-Enter Learn mode **only when the user explicitly asks to persist or update knowledge**.
+Enter Learn/Remember mode **only when the user explicitly asks to persist or update knowledge**.
 
 Examples of explicit intent include:
 
+- `agent_memory remember`
+- `agent_memory learn`
 - "이거 기억해"
 - "메모리에 남겨"
 - "이번 작업 저장해"
@@ -102,7 +123,7 @@ Do not infer permission to write merely because:
 
 When intent is ambiguous, do not write memory.
 
-## Learn procedure
+## Learn / Remember procedure
 
 1. Read `MEMORY_POLICY.md`.
 2. Summarize only the reusable engineering knowledge from the work or decision.
@@ -141,6 +162,59 @@ When intent is ambiguous, do not write memory.
 - unverified speculation;
 - secrets, passwords, API keys, tokens, private keys, or authentication material;
 - personal or sensitive information that is not necessary for reusable engineering knowledge.
+
+# Mode C — Backfill
+
+## Entry condition
+
+Enter Backfill mode **only when the user explicitly requests retrospective session review/persistence**.
+
+Recommended invocation:
+
+```text
+agent_memory backfill
+```
+
+Equivalent requests such as `agent-memory backfill`, `이 세션 백필해`, or `이 세션 회고해서 필요한 기억 반영해` are also valid.
+
+The Backfill invocation itself is explicit permission to persist selected reusable knowledge from the available current session/history. It is not permission to modify unrelated project source or to implement Tool candidates.
+
+## Backfill procedure
+
+1. Read `MEMORY_POLICY.md` and `references/backfill.md`.
+2. Determine how much of the current session/history is actually available to the host Agent. If earlier context is unavailable or truncated, report that limitation and never invent missing history.
+3. Review the available session retrospectively and extract candidates from these areas:
+   - meaningful mistakes, wrong assumptions, failed edits, rework, and recurrence-prevention rules;
+   - verified root causes and correct resolutions;
+   - project invariants, hidden constraints, boundaries, dependencies, and dangerous-to-change behavior;
+   - architecture/design decisions, selected approaches, rejected alternatives, and the reasons;
+   - effective debugging, verification, build, deployment, DB, migration, or test sequences;
+   - reusable procedures and safety checklists;
+   - durable unresolved risks or technical debt that future work must know;
+   - repeated deterministic work that may be a Tool candidate.
+4. Prefer final verified outcomes over intermediate guesses. Preserve a wrong approach only when remembering why it was wrong would prevent recurrence.
+5. Validate important candidates against current source/configuration/tests when practical. Do not promote unverified claims into durable rules.
+6. Search existing memory before writing anything and merge near-duplicates instead of creating parallel memories.
+7. Classify and write only durable, reusable knowledge using the existing memory schema/template.
+8. Rebuild `INDEX.md` after successful memory changes.
+9. Report briefly:
+   - newly stored memories;
+   - updated/deduplicated memories;
+   - recurrence-prevention rules or important project constraints discovered;
+   - Tool candidates found, without implementing them;
+   - notable items intentionally skipped and why;
+   - any session-history coverage limitation.
+
+## Backfill constraints
+
+- Do not save a session summary just because the session was long.
+- Do not save raw conversation or raw logs.
+- Do not store every decision; retain only decisions likely to affect future work.
+- Do not store temporary progress/status that becomes stale immediately.
+- Do not save an unverified hypothesis as fact.
+- Do not overwrite verified final knowledge with an earlier incorrect conclusion from the same session.
+- Tool candidates are reported for later prioritization; Backfill does not create or modify Tools automatically.
+- If there is no worthwhile durable knowledge, report `저장할 가치 있는 신규 기억 없음` instead of inventing content.
 
 # Classification
 
