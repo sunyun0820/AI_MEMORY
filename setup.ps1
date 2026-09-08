@@ -284,6 +284,53 @@ function Set-ManagedInstructionBlock {
     [IO.File]::WriteAllText($Path, $newContent, (New-Object Text.UTF8Encoding($false)))
 }
 
+function Sync-ManagedSkillCopy {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$SkillName,
+        [Parameter(Mandatory = $true)][string]$SourcePath,
+        [Parameter(Mandatory = $true)][string]$DestinationPath
+    )
+
+    $parent = Split-Path $DestinationPath -Parent
+    if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+
+    if (Test-Path $DestinationPath) {
+        $item = Get-Item $DestinationPath -Force
+        if ($item.LinkType -eq "Junction" -or $item.LinkType -eq "SymbolicLink") {
+            $owned = $false
+            foreach ($target in @($item.Target)) {
+                if (Test-SamePath -PathA $target -PathB $SourcePath) { $owned = $true; break }
+            }
+            if (-not $owned) {
+                Write-Warning "$Label has a different link and was not changed: $DestinationPath"
+                return
+            }
+            if (-not (Remove-DirectoryLinkOnly -Path $DestinationPath)) { return }
+        }
+        else {
+            $destinationSkill = Join-Path $DestinationPath "SKILL.md"
+            if (-not (Test-Path $destinationSkill -PathType Leaf)) {
+                Write-Warning "$Label destination is not an AI skill directory and was not changed: $DestinationPath"
+                return
+            }
+
+            $destinationText = [string](Get-Content $destinationSkill -Raw -Encoding UTF8)
+            $escapedSkillName = [regex]::Escape($SkillName)
+            if ($destinationText -notmatch ("(?m)^name:\s*" + $escapedSkillName + "\s*$")) {
+                Write-Warning "$Label destination appears to belong to another skill and was not changed: $DestinationPath"
+                return
+            }
+
+            Remove-Item $DestinationPath -Recurse -Force
+        }
+    }
+
+    New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
+    Get-ChildItem -Path $SourcePath -Force | Copy-Item -Destination $DestinationPath -Recurse -Force
+    Write-Host "[OK]   $Label copied as real files: $DestinationPath"
+}
+
 function Install-CursorLocalPlugin {
     param([Parameter(Mandatory = $true)][string]$CursorHome)
 
@@ -307,7 +354,6 @@ function Install-CursorLocalPlugin {
     $installedRulesRoot = Join-Path $installRoot "rules"
     if (-not (Test-Path $installedRulesRoot)) { New-Item -ItemType Directory -Path $installedRulesRoot -Force | Out-Null }
 
-    # Remove the old combined Cursor rule from pre-split versions.
     Remove-ManagedFileIfOwned -Path (Join-Path $installedRulesRoot "ai-memory.mdc") -Label "legacy combined Cursor rule"
 
     foreach ($rule in $RuleDefinitions) {
@@ -361,30 +407,35 @@ $codexHome = if (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { $env:CODE
 $claudeHome = if (-not [string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR)) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME ".claude" }
 $cursorHome = Join-Path $HOME ".cursor"
 $geminiHome = Join-Path $HOME ".gemini"
-$antigravityConfigHome = Join-Path $geminiHome "config"
+$antigravityIdeHome = Join-Path $geminiHome "antigravity"
+$antigravityCliHome = Join-Path $geminiHome "antigravity-cli"
+$antigravityLegacyConfigHome = Join-Path $geminiHome "config"
 
 $codexEvidence = @((Join-Path $codexHome "config.toml"))
 $claudeEvidence = @((Join-Path $claudeHome "settings.json"))
 $cursorEvidence = @()
 $geminiEvidence = @((Join-Path $geminiHome "settings.json"))
-$antigravityEvidence = @((Join-Path $geminiHome "antigravity"), (Join-Path $geminiHome "antigravity-cli\settings.json"))
+$antigravityIdeEvidence = @($antigravityIdeHome)
+$antigravityCliEvidence = @((Join-Path $antigravityCliHome "settings.json"))
 
 if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
     $cursorEvidence += (Join-Path $env:LOCALAPPDATA "Programs\cursor\Cursor.exe")
-    $antigravityEvidence += (Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe")
-    $antigravityEvidence += (Join-Path $env:LOCALAPPDATA "Programs\Antigravity\Antigravity.exe")
+    $antigravityIdeEvidence += (Join-Path $env:LOCALAPPDATA "Programs\Antigravity\Antigravity.exe")
+    $antigravityCliEvidence += (Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe")
 }
 if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
     $cursorEvidence += (Join-Path $env:ProgramFiles "Cursor\Cursor.exe")
-    $antigravityEvidence += (Join-Path $env:ProgramFiles "Google\antigravity-cli\agy.exe")
-    $antigravityEvidence += (Join-Path $env:ProgramFiles "Antigravity\Antigravity.exe")
+    $antigravityIdeEvidence += (Join-Path $env:ProgramFiles "Antigravity\Antigravity.exe")
+    $antigravityCliEvidence += (Join-Path $env:ProgramFiles "Google\antigravity-cli\agy.exe")
 }
 
 $codexInstalled = Test-AgentInstalled -Commands @("codex") -EvidencePaths $codexEvidence
 $cursorInstalled = Test-AgentInstalled -Commands @("cursor", "agent") -EvidencePaths $cursorEvidence
 $claudeInstalled = Test-AgentInstalled -Commands @("claude") -EvidencePaths $claudeEvidence
 $geminiInstalled = Test-AgentInstalled -Commands @("gemini") -EvidencePaths $geminiEvidence
-$antigravityInstalled = Test-AgentInstalled -Commands @("agy") -EvidencePaths $antigravityEvidence
+$antigravityIdeInstalled = Test-AgentInstalled -EvidencePaths $antigravityIdeEvidence
+$antigravityCliInstalled = Test-AgentInstalled -Commands @("agy") -EvidencePaths $antigravityCliEvidence
+$antigravityInstalled = $antigravityIdeInstalled -or $antigravityCliInstalled
 
 Write-Host ""
 Write-Host "=== Agent Detection ==="
@@ -393,7 +444,8 @@ $agentStatus = [ordered]@{
     "Cursor" = $cursorInstalled
     "Claude Code" = $claudeInstalled
     "Gemini CLI" = $geminiInstalled
-    "Antigravity" = $antigravityInstalled
+    "Antigravity IDE" = $antigravityIdeInstalled
+    "Antigravity CLI" = $antigravityCliInstalled
 }
 foreach ($agent in $agentStatus.GetEnumerator()) {
     if ($agent.Value) { Write-Host "[OK]   $($agent.Key) detected" }
@@ -411,10 +463,9 @@ Write-Host "=== Global Skills ==="
 Write-Host "Detected skills: $($skillDirectories.Count)"
 foreach ($skill in $skillDirectories) { Write-Host " - $($skill.Name)" }
 
-$agentSkillRoots = [ordered]@{}
-if ($codexInstalled -or $cursorInstalled) { $agentSkillRoots["Codex + Cursor"] = Join-Path $HOME ".agents\skills" }
-if ($claudeInstalled) { $agentSkillRoots["Claude Code"] = Join-Path $claudeHome "skills" }
-if ($antigravityInstalled) { $agentSkillRoots["Antigravity"] = Join-Path $antigravityConfigHome "skills" }
+$junctionSkillRoots = [ordered]@{}
+if ($codexInstalled -or $cursorInstalled) { $junctionSkillRoots["Codex + Cursor"] = Join-Path $HOME ".agents\skills" }
+if ($claudeInstalled) { $junctionSkillRoots["Claude Code"] = Join-Path $claudeHome "skills" }
 
 $agentMemorySource = Join-Path $SkillsRoot "agent-memory"
 if (Test-Path $agentMemorySource) {
@@ -422,11 +473,11 @@ if (Test-Path $agentMemorySource) {
     if ($cursorInstalled) { Remove-LegacyJunctionIfOwned -Path (Join-Path $cursorHome "skills\agent-memory") -ExpectedTarget $agentMemorySource | Out-Null }
 }
 
-if ($skillDirectories.Count -gt 0 -and $agentSkillRoots.Count -gt 0) {
+if ($skillDirectories.Count -gt 0 -and $junctionSkillRoots.Count -gt 0) {
     Write-Host ""
     Write-Host "=== Skill Junctions ==="
     foreach ($skill in $skillDirectories) {
-        foreach ($agent in $agentSkillRoots.GetEnumerator()) {
+        foreach ($agent in $junctionSkillRoots.GetEnumerator()) {
             Ensure-Junction -Label "$($agent.Key) skill $($skill.Name)" -JunctionPath (Join-Path $agent.Value $skill.Name) -TargetPath $skill.FullName
         }
     }
@@ -434,12 +485,39 @@ if ($skillDirectories.Count -gt 0 -and $agentSkillRoots.Count -gt 0) {
 else { Write-Host "[SKIP] No skill junction work required." }
 
 Write-Host ""
+Write-Host "=== Gemini / Antigravity Skill Copies ==="
+foreach ($skill in $skillDirectories) {
+    $legacySkill = Join-Path $antigravityLegacyConfigHome "skills\$($skill.Name)"
+    Remove-LegacyJunctionIfOwned -Path $legacySkill -ExpectedTarget $skill.FullName | Out-Null
+
+    if ($geminiInstalled) {
+        Sync-ManagedSkillCopy -Label "Gemini CLI skill $($skill.Name)" -SkillName $skill.Name -SourcePath $skill.FullName -DestinationPath (Join-Path $geminiHome "skills\$($skill.Name)")
+    }
+    if ($antigravityIdeInstalled) {
+        Sync-ManagedSkillCopy -Label "Antigravity IDE skill $($skill.Name)" -SkillName $skill.Name -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityIdeHome "skills\$($skill.Name)")
+    }
+    if ($antigravityCliInstalled) {
+        Sync-ManagedSkillCopy -Label "Antigravity CLI skill $($skill.Name)" -SkillName $skill.Name -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityCliHome "skills\$($skill.Name)")
+    }
+}
+
+$legacyAntigravityAgents = Join-Path $antigravityLegacyConfigHome "AGENTS.md"
+if (Test-Path $legacyAntigravityAgents -PathType Leaf) {
+    $legacyContent = [string](Get-Content $legacyAntigravityAgents -Raw -Encoding UTF8)
+    if ($legacyContent.Contains($ManagedStart) -and $legacyContent.Contains($ManagedEnd)) {
+        Remove-ManagedFileIfOwned -Path $legacyAntigravityAgents -Label "legacy Antigravity managed AGENTS.md"
+    }
+    else {
+        Write-Warning "Legacy Antigravity config AGENTS.md exists and may duplicate ~/.gemini/GEMINI.md. It was not modified: $legacyAntigravityAgents"
+    }
+}
+
+Write-Host ""
 Write-Host "=== Global Instructions + Shared Rules ==="
 if ($codexInstalled) { Set-ManagedInstructionBlock -AgentName "Codex" -Path (Join-Path $codexHome "AGENTS.md") -Content $managedInstruction }
 else { Write-Host "[SKIP] Codex global instruction" }
 
 if ($cursorInstalled) {
-    # Remove unsupported pre-plugin global rule if AI_MEMORY owned it.
     Remove-ManagedFileIfOwned -Path (Join-Path $cursorHome "rules\ai-memory.mdc") -Label "legacy Cursor home rule"
     Install-CursorLocalPlugin -CursorHome $cursorHome
 }
