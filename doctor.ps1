@@ -94,14 +94,9 @@ function Get-SharedRulesBody {
     $parts = @()
     foreach ($name in $RuleSourceNames) {
         $path = Join-Path $RulesRoot $name
-        if (-not (Test-Path $path -PathType Leaf)) {
-            return $null
-        }
-
+        if (-not (Test-Path $path -PathType Leaf)) { return $null }
         $content = [string](Get-Content $path -Raw -Encoding UTF8)
-        if ([string]::IsNullOrWhiteSpace($content)) {
-            return $null
-        }
+        if ([string]::IsNullOrWhiteSpace($content)) { return $null }
         $parts += $content.Trim()
     }
     return ($parts -join "`r`n`r`n")
@@ -161,6 +156,32 @@ function Test-Link {
     Write-DoctorResult FAIL "$Label target mismatch: $LinkPath"
 }
 
+function Test-TextFileMatches {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$ActualPath,
+        [Parameter(Mandatory = $true)][string]$ExpectedPath
+    )
+
+    if (-not (Test-Path $ActualPath -PathType Leaf)) {
+        Write-DoctorResult FAIL "$Label missing: $ActualPath"
+        return
+    }
+    if (-not (Test-Path $ExpectedPath -PathType Leaf)) {
+        Write-DoctorResult FAIL "$Label source missing: $ExpectedPath"
+        return
+    }
+
+    $actual = [string](Get-Content $ActualPath -Raw -Encoding UTF8)
+    $expected = [string](Get-Content $ExpectedPath -Raw -Encoding UTF8)
+    if ((Normalize-Text $actual) -eq (Normalize-Text $expected)) {
+        Write-DoctorResult OK "$Label"
+    }
+    else {
+        Write-DoctorResult FAIL "$Label differs from AI_MEMORY source; run setup.ps1"
+    }
+}
+
 function Test-ManagedInstruction {
     param(
         [Parameter(Mandatory = $true)][string]$AgentName,
@@ -173,10 +194,7 @@ function Test-ManagedInstruction {
         return
     }
 
-    $content = ""
-    $readContent = Get-Content $Path -Raw -Encoding UTF8
-    if ($null -ne $readContent) { $content = [string]$readContent }
-
+    $content = [string](Get-Content $Path -Raw -Encoding UTF8)
     if ([string]::IsNullOrWhiteSpace($content)) {
         Write-DoctorResult FAIL "$AgentName global instruction is empty: $Path"
         return
@@ -249,12 +267,8 @@ else {
     Write-DoctorResult WARN ".git directory not found; this may be a copied repository."
 }
 
-if (Test-CommandExists "git") {
-    Write-DoctorResult OK "git command available"
-}
-else {
-    Write-DoctorResult WARN "git command not found; synchronization will be unavailable."
-}
+if (Test-CommandExists "git") { Write-DoctorResult OK "git command available" }
+else { Write-DoctorResult WARN "git command not found; synchronization will be unavailable." }
 
 $userMemoryHome = [Environment]::GetEnvironmentVariable("AI_MEMORY_HOME", "User")
 if ([string]::IsNullOrWhiteSpace($userMemoryHome)) {
@@ -360,19 +374,11 @@ $skillDirectories = @(
         Sort-Object Name
 )
 
-if ($skillDirectories.Count -gt 0) {
-    Write-DoctorResult OK "Global skills found: $($skillDirectories.Count)"
-}
-else {
-    Write-DoctorResult FAIL "No global skill with SKILL.md found"
-}
+if ($skillDirectories.Count -gt 0) { Write-DoctorResult OK "Global skills found: $($skillDirectories.Count)" }
+else { Write-DoctorResult FAIL "No global skill with SKILL.md found" }
 
-if (Test-Path (Join-Path $skillsRoot "agent-memory\SKILL.md") -PathType Leaf) {
-    Write-DoctorResult OK "agent-memory skill"
-}
-else {
-    Write-DoctorResult FAIL "agent-memory skill missing"
-}
+if (Test-Path (Join-Path $skillsRoot "agent-memory\SKILL.md") -PathType Leaf) { Write-DoctorResult OK "agent-memory skill" }
+else { Write-DoctorResult FAIL "agent-memory skill missing" }
 
 $toolDocs = @(Get-ChildItem -Path (Join-Path $RepoRoot "tools") -Filter "TOOL.md" -File -Recurse -ErrorAction SilentlyContinue)
 Write-DoctorResult OK "Registered tools: $($toolDocs.Count)"
@@ -450,7 +456,22 @@ if (-not [string]::IsNullOrWhiteSpace($expectedManagedInstruction)) {
     else { Write-DoctorResult SKIP "Codex global instruction" }
 
     if ($cursorInstalled) {
-        Test-Link -Label "Cursor AI_MEMORY local plugin" -LinkPath (Join-Path $cursorHome "plugins\local\ai-memory") -TargetPath $CursorPluginRoot
+        $cursorPluginInstall = Join-Path $cursorHome "plugins\local\ai-memory"
+        if (-not (Test-Path $cursorPluginInstall -PathType Container)) {
+            Write-DoctorResult FAIL "Cursor local plugin directory missing: $cursorPluginInstall"
+        }
+        else {
+            $pluginItem = Get-Item $cursorPluginInstall -Force
+            if ($pluginItem.LinkType -eq "Junction" -or $pluginItem.LinkType -eq "SymbolicLink") {
+                Write-DoctorResult FAIL "Cursor local plugin is a link. Current Cursor builds may ignore links outside plugins/local; rerun setup.ps1."
+            }
+            else {
+                Write-DoctorResult OK "Cursor local plugin is installed as a real directory"
+                Test-TextFileMatches -Label "Cursor local plugin manifest matches source" -ActualPath (Join-Path $cursorPluginInstall ".cursor-plugin\plugin.json") -ExpectedPath $CursorPluginManifest
+                Test-TextFileMatches -Label "Cursor local plugin rule matches source" -ActualPath (Join-Path $cursorPluginInstall "rules\ai-memory.mdc") -ExpectedPath $CursorPluginRulePath
+                Write-Host "[INFO] Doctor verifies local files only. Cursor must also allow third-party/local plugin imports."
+            }
+        }
     }
     else { Write-DoctorResult SKIP "Cursor global rule plugin" }
 
