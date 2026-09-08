@@ -5,6 +5,7 @@
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path $PSScriptRoot).Path
+$SkillsRoot = Join-Path $RepoRoot "skills"
 $RulesRoot = Join-Path $RepoRoot "rules"
 $RulesAggregatorPath = Join-Path $RulesRoot "RULES.md"
 $GlobalInstructionSource = Join-Path $RepoRoot "instructions\GLOBAL_AGENT_INSTRUCTIONS.md"
@@ -61,7 +62,6 @@ function Test-SamePath {
         [Parameter(Mandatory = $true)][string]$PathA,
         [Parameter(Mandatory = $true)][string]$PathB
     )
-
     $a = Get-ResolvedPathOrNull -Path $PathA
     $b = Get-ResolvedPathOrNull -Path $PathB
     if ($null -eq $a -or $null -eq $b) { return $false }
@@ -86,7 +86,6 @@ function Test-AgentInstalled {
         [string[]]$Commands = @(),
         [string[]]$EvidencePaths = @()
     )
-
     foreach ($command in $Commands) {
         if (Test-CommandExists $command) { return $true }
     }
@@ -108,7 +107,6 @@ function Get-SharedRulesBody {
 function Get-ExpectedRulesAggregator {
     $body = Get-SharedRulesBody
     if ($null -eq $body) { return $null }
-
     $header = @"
 # Shared Agent Rules
 
@@ -122,7 +120,6 @@ function Get-CursorRuleContent {
         [Parameter(Mandatory = $true)][string]$Description,
         [Parameter(Mandatory = $true)][string]$Content
     )
-
     return (@"
 ---
 description: "$Description"
@@ -142,17 +139,14 @@ function Test-Link {
     )
 
     if (-not (Test-Path $LinkPath)) { Write-DoctorResult FAIL "$Label missing: $LinkPath"; return }
-
     $item = Get-Item $LinkPath -Force
     if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") {
         Write-DoctorResult FAIL "$Label is not a link: $LinkPath"
         return
     }
-
     foreach ($target in @($item.Target)) {
         if (Test-SamePath -PathA $target -PathB $TargetPath) { Write-DoctorResult OK $Label; return }
     }
-
     Write-DoctorResult FAIL "$Label target mismatch: $LinkPath"
 }
 
@@ -165,7 +159,6 @@ function Test-TextFileMatches {
 
     if (-not (Test-Path $ActualPath -PathType Leaf)) { Write-DoctorResult FAIL "$Label missing: $ActualPath"; return }
     if (-not (Test-Path $ExpectedPath -PathType Leaf)) { Write-DoctorResult FAIL "$Label source missing: $ExpectedPath"; return }
-
     $actual = [string](Get-Content $ActualPath -Raw -Encoding UTF8)
     $expected = [string](Get-Content $ExpectedPath -Raw -Encoding UTF8)
     if ((Normalize-Text $actual) -eq (Normalize-Text $expected)) { Write-DoctorResult OK $Label }
@@ -179,20 +172,13 @@ function Test-SkillCopy {
         [Parameter(Mandatory = $true)][string]$DestinationPath
     )
 
-    if (-not (Test-Path $DestinationPath -PathType Container)) {
-        Write-DoctorResult FAIL "$Label missing: $DestinationPath"
-        return
-    }
-
+    if (-not (Test-Path $DestinationPath -PathType Container)) { Write-DoctorResult FAIL "$Label missing: $DestinationPath"; return }
     $item = Get-Item $DestinationPath -Force
     if ($item.LinkType -eq "Junction" -or $item.LinkType -eq "SymbolicLink") {
-        Write-DoctorResult FAIL "$Label is a link; rerun setup.ps1 so the agent gets real files: $DestinationPath"
+        Write-DoctorResult FAIL "$Label is a link; current Antigravity/Gemini deployment must use real files: $DestinationPath"
         return
     }
-
-    $sourceSkill = Join-Path $SourcePath "SKILL.md"
-    $destinationSkill = Join-Path $DestinationPath "SKILL.md"
-    Test-TextFileMatches -Label "$Label SKILL.md matches source" -ActualPath $destinationSkill -ExpectedPath $sourceSkill
+    Test-TextFileMatches -Label $Label -ActualPath (Join-Path $DestinationPath "SKILL.md") -ExpectedPath (Join-Path $SourcePath "SKILL.md")
 }
 
 function Test-ManagedInstruction {
@@ -203,7 +189,6 @@ function Test-ManagedInstruction {
     )
 
     if (-not (Test-Path $Path -PathType Leaf)) { Write-DoctorResult FAIL "$AgentName global instruction missing: $Path"; return }
-
     $content = [string](Get-Content $Path -Raw -Encoding UTF8)
     $startIndex = $content.IndexOf($ManagedStart)
     $endIndex = $content.IndexOf($ManagedEnd)
@@ -255,15 +240,12 @@ $requiredPaths = @(
     "scripts\search-tools.ps1",
     "scripts\rebuild-tool-index.ps1"
 )
-
 foreach ($relative in $requiredPaths) {
     if (Test-Path (Join-Path $RepoRoot $relative)) { Write-DoctorResult OK "Required item: $relative" }
     else { Write-DoctorResult FAIL "Missing required item: $relative" }
 }
 
-if (Test-Path (Join-Path $CursorPluginRulesRoot "ai-memory.mdc") -PathType Leaf) {
-    Write-DoctorResult FAIL "Legacy combined Cursor rule still exists in repository; pull the latest version"
-}
+if (Test-Path (Join-Path $CursorPluginRulesRoot "ai-memory.mdc") -PathType Leaf) { Write-DoctorResult FAIL "Legacy combined Cursor rule still exists in repository" }
 else { Write-DoctorResult OK "Legacy combined Cursor rule removed from repository" }
 
 if (Test-Path (Join-Path $RepoRoot ".git") -PathType Container) { Write-DoctorResult OK "Git repository" }
@@ -276,10 +258,6 @@ $userMemoryHome = [Environment]::GetEnvironmentVariable("AI_MEMORY_HOME", "User"
 if ([string]::IsNullOrWhiteSpace($userMemoryHome)) { Write-DoctorResult FAIL "User AI_MEMORY_HOME is not registered" }
 elseif (Test-SamePath -PathA $userMemoryHome -PathB $RepoRoot) { Write-DoctorResult OK "User AI_MEMORY_HOME=$userMemoryHome" }
 else { Write-DoctorResult FAIL "User AI_MEMORY_HOME points elsewhere: $userMemoryHome" }
-
-if ([string]::IsNullOrWhiteSpace($env:AI_MEMORY_HOME)) { Write-DoctorResult WARN "Current shell has no AI_MEMORY_HOME; rerun setup.ps1 or open a new shell." }
-elseif (Test-SamePath -PathA $env:AI_MEMORY_HOME -PathB $RepoRoot) { Write-DoctorResult OK "Current shell AI_MEMORY_HOME is correct" }
-else { Write-DoctorResult WARN "Current shell AI_MEMORY_HOME differs: $env:AI_MEMORY_HOME" }
 
 $tempPath = Join-Path $RepoRoot (".doctor-write-test-" + [guid]::NewGuid().ToString("N") + ".tmp")
 try {
@@ -310,16 +288,13 @@ else {
 foreach ($rule in $RuleDefinitions) {
     $sourcePath = Join-Path $RulesRoot $rule.Source
     if (-not (Test-Path $sourcePath -PathType Leaf)) { Write-DoctorResult FAIL "Shared rule missing: rules\$($rule.Source)"; continue }
-
     $sourceContent = [string](Get-Content $sourcePath -Raw -Encoding UTF8)
     if ([string]::IsNullOrWhiteSpace($sourceContent)) { Write-DoctorResult FAIL "Shared rule is empty: rules\$($rule.Source)"; continue }
-
     Write-DoctorResult OK "Shared rule source: rules\$($rule.Source)"
 
     $adapterPath = Join-Path $CursorPluginRulesRoot $rule.Adapter
     $expectedAdapter = Get-CursorRuleContent -Description $rule.Description -Content $sourceContent.Trim()
     if (-not (Test-Path $adapterPath -PathType Leaf)) { Write-DoctorResult FAIL "Cursor rule adapter missing: $adapterPath"; continue }
-
     $actualAdapter = [string](Get-Content $adapterPath -Raw -Encoding UTF8)
     if ((Normalize-Text $actualAdapter) -eq (Normalize-Text $expectedAdapter)) { Write-DoctorResult OK "Cursor rule adapter matches source: $($rule.Adapter)" }
     else { Write-DoctorResult FAIL "Cursor rule adapter is stale: $($rule.Adapter); run setup.ps1" }
@@ -337,19 +312,13 @@ else {
     $expectedManagedInstruction = $globalInstruction.Trim() + "`r`n`r`n" + $expectedRulesAggregator.Trim()
 }
 
-Write-Host ""
-Write-Host "=== Skills / Tools ==="
-$skillsRoot = Join-Path $RepoRoot "skills"
 $skillDirectories = @(
-    Get-ChildItem -Path $skillsRoot -Directory -ErrorAction SilentlyContinue |
+    Get-ChildItem -Path $SkillsRoot -Directory -ErrorAction SilentlyContinue |
         Where-Object { Test-Path (Join-Path $_.FullName "SKILL.md") } |
         Sort-Object Name
 )
 if ($skillDirectories.Count -gt 0) { Write-DoctorResult OK "Global skills found: $($skillDirectories.Count)" }
 else { Write-DoctorResult FAIL "No global skill with SKILL.md found" }
-
-$toolDocs = @(Get-ChildItem -Path (Join-Path $RepoRoot "tools") -Filter "TOOL.md" -File -Recurse -ErrorAction SilentlyContinue)
-Write-DoctorResult OK "Registered tools: $($toolDocs.Count)"
 
 Write-Host ""
 Write-Host "=== Agent Detection ==="
@@ -357,16 +326,16 @@ $codexHome = if (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { $env:CODE
 $claudeHome = if (-not [string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR)) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME ".claude" }
 $cursorHome = Join-Path $HOME ".cursor"
 $geminiHome = Join-Path $HOME ".gemini"
-$antigravityIdeHome = Join-Path $geminiHome "antigravity"
-$antigravityCliHome = Join-Path $geminiHome "antigravity-cli"
-$antigravityLegacyConfigHome = Join-Path $geminiHome "config"
+$antigravityIdeSkillsHome = Join-Path $geminiHome "config\skills"
+$antigravityCliSkillsHome = Join-Path $geminiHome "antigravity-cli\skills"
+$staleAntigravityIdeSkillsHome = Join-Path $geminiHome "antigravity\skills"
 
 $codexEvidence = @((Join-Path $codexHome "config.toml"))
 $claudeEvidence = @((Join-Path $claudeHome "settings.json"))
 $cursorEvidence = @()
 $geminiEvidence = @((Join-Path $geminiHome "settings.json"))
-$antigravityIdeEvidence = @($antigravityIdeHome)
-$antigravityCliEvidence = @((Join-Path $antigravityCliHome "settings.json"))
+$antigravityIdeEvidence = @((Join-Path $geminiHome "config"), (Join-Path $geminiHome "antigravity"))
+$antigravityCliEvidence = @((Join-Path $geminiHome "antigravity-cli\settings.json"))
 
 if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
     $cursorEvidence += (Join-Path $env:LOCALAPPDATA "Programs\cursor\Cursor.exe")
@@ -403,9 +372,7 @@ foreach ($agent in $agentStatus.GetEnumerator()) {
 Write-Host ""
 Write-Host "=== Skill Deployment ==="
 if ($codexInstalled -or $cursorInstalled) {
-    foreach ($skill in $skillDirectories) {
-        Test-Link -Label "Codex + Cursor skill $($skill.Name)" -LinkPath (Join-Path $HOME ".agents\skills\$($skill.Name)") -TargetPath $skill.FullName
-    }
+    foreach ($skill in $skillDirectories) { Test-Link -Label "Codex + Cursor skill $($skill.Name)" -LinkPath (Join-Path $HOME ".agents\skills\$($skill.Name)") -TargetPath $skill.FullName }
 }
 else { Write-DoctorResult SKIP "Codex + Cursor skill checks" }
 
@@ -420,34 +387,30 @@ if ($geminiInstalled) {
 else { Write-DoctorResult SKIP "Gemini CLI skill checks" }
 
 if ($antigravityIdeInstalled) {
-    foreach ($skill in $skillDirectories) { Test-SkillCopy -Label "Antigravity IDE skill $($skill.Name)" -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityIdeHome "skills\$($skill.Name)") }
-    Write-Host "[INFO] Antigravity IDE should show agent-memory under Global Skills after restart/reload."
+    foreach ($skill in $skillDirectories) { Test-SkillCopy -Label "Antigravity IDE skill $($skill.Name)" -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityIdeSkillsHome $skill.Name) }
+    Write-Host "[INFO] Antigravity IDE global skill path: ~/.gemini/config/skills/"
 }
 else { Write-DoctorResult SKIP "Antigravity IDE skill checks" }
 
 if ($antigravityCliInstalled) {
-    foreach ($skill in $skillDirectories) { Test-SkillCopy -Label "Antigravity CLI skill $($skill.Name)" -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityCliHome "skills\$($skill.Name)") }
+    foreach ($skill in $skillDirectories) { Test-SkillCopy -Label "Antigravity CLI skill $($skill.Name)" -SourcePath $skill.FullName -DestinationPath (Join-Path $antigravityCliSkillsHome $skill.Name) }
 }
 else { Write-DoctorResult SKIP "Antigravity CLI skill checks" }
 
 foreach ($skill in $skillDirectories) {
-    $legacySkill = Join-Path $antigravityLegacyConfigHome "skills\$($skill.Name)"
-    if (Test-Path $legacySkill) {
-        Write-DoctorResult WARN "Legacy Antigravity skill path still exists and may be ignored by current IDE/CLI: $legacySkill"
-    }
+    $stale = Join-Path $staleAntigravityIdeSkillsHome $skill.Name
+    if (Test-Path $stale) { Write-DoctorResult WARN "Stale Antigravity IDE skill copy exists at obsolete AI_MEMORY path: $stale; run setup.ps1" }
 }
 
-$legacyAntigravityAgents = Join-Path $antigravityLegacyConfigHome "AGENTS.md"
+$legacyAntigravityAgents = Join-Path $geminiHome "config\AGENTS.md"
 if (Test-Path $legacyAntigravityAgents -PathType Leaf) {
     $legacyContent = [string](Get-Content $legacyAntigravityAgents -Raw -Encoding UTF8)
     if ($legacyContent.Contains($ManagedStart) -and $legacyContent.Contains($ManagedEnd)) {
         Write-DoctorResult FAIL "Legacy AI_MEMORY-managed Antigravity AGENTS.md still exists; run setup.ps1: $legacyAntigravityAgents"
     }
-    else {
-        Write-DoctorResult WARN "Legacy Antigravity config AGENTS.md exists. Confirm it does not duplicate ~/.gemini/GEMINI.md: $legacyAntigravityAgents"
-    }
+    else { Write-DoctorResult WARN "Antigravity config AGENTS.md exists. Confirm it does not duplicate ~/.gemini/GEMINI.md: $legacyAntigravityAgents" }
 }
-else { Write-DoctorResult OK "No legacy Antigravity config AGENTS.md duplicate" }
+else { Write-DoctorResult OK "No duplicate Antigravity config AGENTS.md" }
 
 Write-Host ""
 Write-Host "=== Global Instructions + Shared Rules ==="
@@ -457,27 +420,19 @@ if (-not [string]::IsNullOrWhiteSpace($expectedManagedInstruction)) {
 
     if ($cursorInstalled) {
         $cursorPluginInstall = Join-Path $cursorHome "plugins\local\ai-memory"
-        if (-not (Test-Path $cursorPluginInstall -PathType Container)) {
-            Write-DoctorResult FAIL "Cursor local plugin directory missing: $cursorPluginInstall"
-        }
+        if (-not (Test-Path $cursorPluginInstall -PathType Container)) { Write-DoctorResult FAIL "Cursor local plugin directory missing: $cursorPluginInstall" }
         else {
             $pluginItem = Get-Item $cursorPluginInstall -Force
-            if ($pluginItem.LinkType -eq "Junction" -or $pluginItem.LinkType -eq "SymbolicLink") {
-                Write-DoctorResult FAIL "Cursor local plugin is a link; rerun setup.ps1"
-            }
+            if ($pluginItem.LinkType -eq "Junction" -or $pluginItem.LinkType -eq "SymbolicLink") { Write-DoctorResult FAIL "Cursor local plugin is a link; rerun setup.ps1" }
             else {
                 Write-DoctorResult OK "Cursor local plugin is installed as a real directory"
                 Test-TextFileMatches -Label "Cursor local plugin manifest matches source" -ActualPath (Join-Path $cursorPluginInstall ".cursor-plugin\plugin.json") -ExpectedPath $CursorPluginManifest
-
                 foreach ($rule in $RuleDefinitions) {
                     Test-TextFileMatches -Label "Cursor installed rule matches source: $($rule.Adapter)" -ActualPath (Join-Path $cursorPluginInstall "rules\$($rule.Adapter)") -ExpectedPath (Join-Path $CursorPluginRulesRoot $rule.Adapter)
                 }
-
                 $legacyInstalled = Join-Path $cursorPluginInstall "rules\ai-memory.mdc"
                 if (Test-Path $legacyInstalled -PathType Leaf) { Write-DoctorResult FAIL "Legacy combined Cursor rule still installed; rerun setup.ps1" }
                 else { Write-DoctorResult OK "Legacy combined Cursor rule removed from installed plugin" }
-
-                Write-Host "[INFO] Expected Cursor UI: one 'Ai Memory' local plugin and three AI_MEMORY rules."
             }
         }
     }
@@ -511,6 +466,5 @@ if ($script:WarnCount -gt 0) {
     Write-Host "RESULT=PASS_WITH_WARNINGS"
     exit 0
 }
-
 Write-Host "RESULT=PASS"
 exit 0
