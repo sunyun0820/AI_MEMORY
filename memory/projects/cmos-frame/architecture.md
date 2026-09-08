@@ -1,4 +1,4 @@
-﻿---
+---
 id: MEM-20260908-frame-architecture
 type: project
 scope: project
@@ -14,32 +14,30 @@ occurrences: 1
 source_agent: antigravity
 ---
 
-# C-MOS Framework Architecture & Module Boundaries
+# C-MOS Framework 모듈 경계와 자동 탐색 계약
 
-## Context
-C-MOS Framework 3.5.x 스택은 Spring Boot나 Spring Framework를 사용하지 않는 순수 Java 기반 자체 프레임워크다. 향후 AI Agent가 불필요한 전체 소스 탐색 및 오추측을 하지 않도록 핵심 모듈 경계와 컴포넌트 탐색 규칙을 정립한다.
+## Core Knowledge
 
-## Architecture & Module Chain
-Canonical Naming 체계:
-1. **FRAME-API** (`framework-api`): 순수 계약 계층
-   - 패키지: `com.thirautech.cmos.framework.api`
-   - 인터페이스, Abstract 기본 클래스, 어노테이션, `Factory`, `Environment` 포함. 외부 의존성은 slf4j, javax.persistence, mybatis 수준으로 최소화됨.
-2. **FRAME-IIA** (`framework-iia`): 기반 인프라/구현 계층
-   - 패키지: `com.thirautech.cmos.framework.iia`
-   - `FRAME-API` 의존. Base 구현체(`BaseController`, `BaseManager`, `BaseRepository`, `BaseDispatcher`, `BaseTransaction`), DB 커넥션 풀 및 드라이버, 14개 서브 팩토리 구체 클래스, SQL Maker, 파서, 커넥터 구현체 포함.
-3. **FRAME-CORE** (`c-mos-core`): MES 도메인 공통 기반
-   - 패키지: `com.thirautech.cmos.mes.core.*`, `com.thirautech.cmos.core.*`
-   - `FRAME-IIA` 의존. `CoreController`, `CoreManager`, `CoreRepository`, `CoreEntity`, `CoreRule`, `DbContext`, 공통 상태(State) 및 옵션셋(OptionSet), 기본 Web Servlet Dispatcher 포함.
-4. **MES-CORE** (`mes-core`): MES 공통 비즈니스 코어
-   - 패키지: `com.thirautech.cmos.mes.core.*`
-   - `FRAME-CORE` 의존. 상위 비즈니스 모델러(CDS, DAS, PMS, POS, PPS, QMS, RDS), 웹 보안/인증 필터, SSO, 파일 업/다운로드, 바코드 유틸리티 포함.
-5. **PROJECT**: 실제 구축 프로젝트
-   - `MES-CORE` 및 `FRAME-CORE`의 Core 클래스를 상속받아 고객사별 사이트 로직 구현.
+확인한 C-MOS 3.5.x 스택은 자체 Factory·Dispatcher·Repository로 동작한다. Spring Boot의 자동 구성·Spring Data JPA 계약을 전제로 해석하지 않는다. 같은 core 이름과 패키지가 서로 다른 모듈에 걸쳐 있으므로 디렉터리와 POM을 함께 확인한다.
 
-## Verified Invariants
-- **Spring 미사용**: Spring Web, Spring Data, Spring Security 등을 사용하지 않으며 자체 Dispatcher, JPA Repository 구현체, 자체 서블릿 필터를 사용한다.
-- **클래스패스 스캔 범위**: `Environment.PACKAGE_PREFIX_SET = Set.of("com.thirautech")`로 선언되어 있어, `Environment.putClassSet` 시 패키지 prefix가 `com.thirautech`인 클래스만 스캔 대상(`classSet`)에 수집된다. 프레임워크 자동 탐색 대상은 이 하위 패키지에 위치해야 한다.
-- **Factory 단일 구현체 계약**: `Factory.getAndInitialize(cls)`는 대상 인터페이스 구현체가 `0`개이거나 `2개 이상`이면 `UnsupportedOperationException`("Not Found" 또는 "Too Many Class")을 발생시킨다. 인터페이스당 구체 구현 클래스는 스캔 범위 내에 정확히 1개여야 한다.
+## Module Boundaries
 
-## Reusable Rule
-C-MOS 관련 소스를 분석하거나 구현할 때 Spring 의존적 가정(어노테이션 기반 자동 구성 등)을 배제하고, `FRAME-API` -> `FRAME-IIA` -> `FRAME-CORE` -> `MES-CORE` -> `PROJECT` 계층 순서 및 `com.thirautech` 패키지 규칙에 맞추어 설계한다.
+`cmos frame` checkout 기준:
+
+| 역할 | 실제 디렉터리 | 핵심 경계 |
+|---|---|---|
+| FRAME-API / framework-api | `framework/api` | 인터페이스·Abstract·어노테이션·Factory·Environment |
+| FRAME-IIA / framework-iia | `framework/iia` | API 계약 구현, Base 계층·Factory·DB/SQL 인프라 |
+| FRAME-CORE / c-mos-core | `framework/core` | CoreRule·CoreEntity·CoreRepository·DbContext 등 MES 기반 계약 |
+| MES-CORE / mes-core | `core` | 공통 업무 모델러, 웹 인증 필터와 API 권한 |
+| PROJECT | 예: busan의 service/UI | 공통 Core 계약을 사용하는 고객사 로직·구성 |
+
+## Applicability / Recurrence Prevention
+
+- `Environment.PACKAGE_PREFIX_SET`는 `com.thirautech`이며 `putClassSet`에서 prefix로 자동 탐색 수집을 제한한다. 자동 탐색을 기대하는 클래스의 패키지를 확인한다.
+- `Factory.getAndInitialize(cls)`는 해당 Factory 인터페이스의 탐색 결과가 없거나 둘 이상이면 Not Found / Too Many Class로 실패한다. 이 단일 구현 조건을 모든 업무 인터페이스에 확대하지 않는다.
+- 모듈 이름만 보고 `core`와 `framework/core`를 혼동하지 않는다. 상세 경로는 [탐색 지도](source-navigation-map.md), 실행 순서는 [수명주기](runtime-lifecycle.md)를 참조한다.
+
+## Verification
+
+2026-09-08 현재 checkout의 모듈 경로, `framework/api/.../Factory.java`의 getAndInitialize 및 `Environment.java`의 prefix/putClassSet을 정적 확인했다. Spring 미사용은 이 조사 대상 스택의 구조 설명이며 모든 향후 소비 프로젝트의 의존성까지 금지하거나 보장하는 규칙은 아니다.

@@ -14,7 +14,7 @@ occurrences: 1
 source_agent: cursor-agent
 ---
 
-# eti LOTDEFECT 수량 관련 잔여 경계
+# eti LOTDEFECT 재저장 경로의 과거 소스 관찰과 재확인 지점
 
 ## Context
 
@@ -24,7 +24,7 @@ source_agent: cursor-agent
 
 API Qty 버그와 별개로, 기존 불량 수량을 키우는 재저장이 Service에서 막히거나 CONVERTED Lot의 MaterialLot 수량이 요청 전체만큼 다시 빠질 수 있다.
 
-## Root Cause
+## Historical Source Observation
 
 `PRODUCTIONLotManager.MakeLotList_Defect`는 `item.Qty < 요청 불량 합`으로만 검증한다. 차분을 보지 않는다. `SaveLotDefect`의 CONVERTED 분기는 `materiallot.Qty -= 요청수량 전체`를 적용한다.
 
@@ -39,3 +39,7 @@ eti 불량 재저장은 API Qty, Service 검증, CONVERTED MaterialLot를 따로
 ## Verification
 
 `mes_service` `PRODUCTIONLotManager.DefectLot.cs`와 `ManagerExtenstions.Production.Lotdefect.cs` 소스 확인. 재현 테스트 없음.
+
+## Current Verification Boundary
+
+2026-09-08 전체 정제에서 현재 접근 가능한 프로젝트 경로에는 원본 ETI checkout을 찾지 못해 재검증하지 않았다. 위 관찰은 2026-08-21 소스 기준이며 현재도 미해결이라고 단정하지 않는다. 해당 기능을 수정할 때 실제 checkout의 API·Service 검증·CONVERTED MaterialLot 경로를 다시 대조한다. 기존 medium confidence를 유지하며 런타임 장애로 승격하지 않는다.

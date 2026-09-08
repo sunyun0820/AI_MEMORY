@@ -1,4 +1,4 @@
-﻿---
+---
 id: MEM-20260908-frame-contracts
 type: project
 scope: project
@@ -14,39 +14,28 @@ occurrences: 1
 source_agent: antigravity
 ---
 
-# C-MOS Framework Extension Contracts & Invariants
+# C-MOS 확장 계약과 엔티티·이력 경계
 
-## Context
-프로젝트(PROJECT) 개발자가 `FRAME-CORE` 및 `MES-CORE`를 상속하여 비즈니스 로직, 엔티티, 영속 계층을 구현할 때 반드시 준수해야 하는 상속 계약, 생명주기 제어 및 데이터 불변조건을 정의한다.
+## Core Knowledge
 
-## 5대 핵심 상속 체인
-1. **Controller**: `InterfaceController` (API) -> `AbstractController` (API) -> `BaseController` (IIA) -> `CoreController` (FRAME-CORE) -> `PROJECT`
-2. **Manager**: `InterfaceManager` (API) -> `AbstractManager` (API) -> `BaseManager` (IIA) -> `CoreManager` (FRAME-CORE) -> `PROJECT`
-3. **Repository**: `InterfaceRepository` (API) -> `AbstractRepository` (API) -> `BaseRepository` (IIA) -> `CoreRepository` (FRAME-CORE) -> `PROJECT`
-4. **Entity**: `InterfaceEntity` (API) -> `AbstractEntity` (API) -> `BaseEntity` (IIA) -> `CoreEntity` (FRAME-CORE) -> `PROJECT`
-5. **Rule/Event**: `InterfaceEvent` (API) -> `AbstractEvent` (API) -> `BaseEvent` (IIA) -> `CoreRule` (FRAME-CORE) -> `PROJECT`
+업무 이벤트는 CoreRule의 `messageValidation()`과 `process()`를 구현한다. CoreRule이 `validation()`·`execute()`를 final로 연결하므로 이 메서드를 직접 재정의하지 않는다.
 
-## CoreRule 실행 계약
-- `CoreRule`은 상위 `BaseEvent`의 `validation()`과 `execute()`를 `final`로 재정의하여 직접 오버라이드할 수 없도록 제한한다.
-- 대신 다음 두 추상 메서드의 구현을 강제한다:
-  - `public abstract void messageValidation()`: 파라미터 유효성 검증 (`webDataCheck` 등 활용)
-  - `public abstract void process()`: 실제 비즈니스 트랜잭션 수행
+## Extension / Entity Boundaries
 
-## CoreEntity 공통 필드 및 컬럼 관리
-- **공통 14개 필드 규약 (`CORE_COLUMN_LIST`)**:
-  `ACTIVITY`, `PREVACTIVITY`, `CUSTOMACTIVITY`, `PREVCUSTOMACTIVITY`, `ISUSABLE`, `DESCRIPTION`, `REASONCODE`, `COMMENTS`, `CREATOR`, `CREATETIME`, `MODIFIER`, `MODIFYTIME`, `LASTEVENTTIME`, `TID`
-- `getAllColumnsExceptCore()`: 도메인 고유 필드만 추출할 때 공통 14개 필드를 제거하여 반환한다.
-- **Touched Columns 관리와 엔티티 재사용 제어**:
-  - 엔티티 내부의 변경 필드 집합(`touchedColumns`, `touchedColumnNames`)을 추적한다.
-  - `CoreRepository.selectBiz()`, `select4Update()` 등은 기본 검색 조건으로 `ISUSABLE = 'USABLE'`을 설정한 뒤 조회를 수행한다. 만약 호출자가 원래 `ISUSABLE`을 검색 조건으로 지정하지 않았다면, 조회 후 `touchedColumns`에서 `ISUSABLE`을 다시 제거하여 원복한다. 이는 조회에 사용된 동일 엔티티 인스턴스를 후속 로직에서 재사용할 때 원치 않는 조건 누수나 오염을 방지하기 위함이다.
+Controller·Manager·Repository·Entity는 `Interface(API) → Abstract(API) → Base(IIA) → Core(FRAME-CORE) → PROJECT`를 따른다. 이벤트는 InterfaceEvent → AbstractEvent → BaseEvent → CoreRule이다.
 
-## Repository CUD 및 Hist 저장 규칙
-- **논리 삭제(Soft Delete) vs 물리 삭제**:
-  - `deleteBiz()`: 엔티티의 `ISUSABLE`을 `UNUSABLE`로 변경하고 `RequestType.UPDATE`를 수행하여 DB 행을 보존하는 논리 삭제를 수행한다.
-  - `unDelete()`: `ISUSABLE`을 다시 `USABLE`로 변경하고 `RequestType.UPDATE`를 수행한다.
-  - `realDelete()`: `RequestType.REALDELETE`를 전달하여 DB 물리 `DELETE`를 수행한다.
-- **이력(Hist) 자동 저장 조건**:
-  - `upsertEntityWithFullColumn` 및 배치 연산에서 `saveHist == true`이고 본 테이블 연산의 영향 행 수가 1 이상(`count > 0`)일 때 `CoreEntityUtility.getEntityHist(entity)`를 생성하여 이력 테이블에 INSERT한다.
+CoreEntity의 공통 14개 컬럼은 `ACTIVITY, PREVACTIVITY, CUSTOMACTIVITY, PREVCUSTOMACTIVITY, ISUSABLE, DESCRIPTION, REASONCODE, COMMENTS, CREATOR, CREATETIME, MODIFIER, MODIFYTIME, LASTEVENTTIME, TID`다. `getAllColumnsExceptCore()`는 이 목록을 제외한다.
 
-## Reusable Rule
-신규 업무 로직 개발 시 Spring MVC 컨트롤러 대신 `CoreRule`을 상속하여 검증(`messageValidation`)과 실행(`process`)을 분리하고, 삭제 작업 시 시스템 요구사항에 따라 `deleteBiz`(논리삭제, 기본 권장)와 `realDelete`(물리삭제)를 명확히 구분하여 호출한다.
+`CoreRepository.selectBiz/select4Update`는 조회 동안 ISUSABLE을 USABLE로 덮고 정상 반환 경로에서 원래 값을 복구한다. 원래 touched가 아니었다면 touchedColumns와 touchedColumnNames에서도 제거한다. 이는 호출자가 UNUSABLE을 주면 그대로 검색한다는 뜻이 아니다. 복원은 finally가 아니므로 조회 예외 후 같은 조건 엔티티를 재사용할 때 복구됐다고 가정하지 않는다.
+
+## CUD / History Boundaries
+
+- `deleteBiz`: ISUSABLE=UNUSABLE의 UPDATE인 논리 삭제.
+- `unDelete`: ISUSABLE=USABLE의 UPDATE.
+- `realDelete`: REALDELETE의 물리 DELETE. 호출 이름만 보고 논리 삭제로 오해하지 않는다.
+- `upsertEntityWithFullColumn` 및 배치 구현은 saveHist=true이고 본 연산 count/totalCount>0일 때 Hist INSERT를 호출한다. 목록 경로의 총 영향 행 수 조건을 각 행의 성공 여부 검증으로 해석하지 않는다.
+- 반환 count에 Hist INSERT 수가 더해질 수 있으므로 업무 행 수와 동일하다고 가정하지 않는다.
+
+## Applicability / Verification
+
+2026-09-08 현재 `framework/core/.../CoreRule.java`, `CoreEntity.java`, `CoreRepository.java`의 final 계약·컬럼 목록·조건 복구·이력 분기를 정적 확인했다. DB·예외 주입 테스트는 수행하지 않았다. 상세 위치는 [탐색 지도](source-navigation-map.md)를 참조한다.

@@ -1,4 +1,4 @@
-﻿---
+---
 id: MEM-20260908-frame-nav
 type: project
 scope: project
@@ -14,32 +14,31 @@ occurrences: 1
 source_agent: antigravity
 ---
 
-# C-MOS Framework Source Navigation Map
+# C-MOS Source Navigation Map
 
-## Context
-향후 AI Agent가 C-MOS Framework 및 MES-CORE 기반 작업 시 불필요한 전체 파일 검색과 토큰 소모를 방지하고, 분석 목적에 맞는 핵심 클래스로 즉시 이동할 수 있도록 저장소 상대경로 기반의 탐색 지도를 제공한다.
+## Scope
 
-## Source Navigation Matrix
+현재 `cmos frame` checkout 루트 기준이다. `framework/core`는 FRAME-CORE이고 최상위 `core`는 MES-CORE다. 아래 java 경로의 `...`는 `src/main/java/com/thirautech/cmos`를 줄인 표기이며 그대로 열 수 있는 리터럴 경로가 아니다.
 
-| 탐색 목적 / 질문 | 모듈 | 상대 경로 / 클래스 | 핵심 메서드 및 심볼 |
-|---|---|---|---|
-| **부트스트랩 / 팩토리 초기화 순서** | `FRAME-API` | `api/src/main/java/.../api/Factory.java` | `initialize()`, `destroy()`, `getAndInitialize()` |
-| **클래스패스 스캔 / 패키지 필터** | `FRAME-API` | `api/src/main/java/.../api/Environment.java` | `PACKAGE_PREFIX_SET`, `putClassSet()`, `isTraceClass()` |
-| **요청 수명주기 / 커밋·롤백 제어** | `FRAME-IIA` | `iia/src/main/java/.../iia/abstracts/entry/BaseDispatcher.java` | `executeInternal()`, `start()`, `commit()`, `rollback()` |
-| **요청 전/후처리 훅 (Processor)** | `FRAME-IIA` | `iia/src/main/java/.../iia/abstracts/entry/BaseProcessor.java` | `setStartTime()`, `setEndTime()` |
-| **트랜잭션(Basic / Separated) 분기** | `FRAME-IIA` | `iia/src/main/java/.../iia/abstracts/context/BaseTransaction.java` | `TransactionType`, `initialize()`, `decreseCounter()` |
-| **비즈니스 Rule (검증 / 실행 2단계)** | `FRAME-CORE` | `core/src/main/java/.../mes/core/abstracts/business/CoreRule.java` | `validation()`(final), `messageValidation()`, `process()` |
-| **엔티티 공통 14개 필드 규약** | `FRAME-CORE` | `core/src/main/java/.../mes/core/abstracts/business/CoreEntity.java` | `CORE_COLUMN_LIST`, `getAllColumnsExceptCore()` |
-| **CRUD / 논리삭제 / Hist 자동 저장** | `FRAME-CORE` | `core/src/main/java/.../mes/core/abstracts/business/CoreRepository.java` | `deleteBiz()`, `realDelete()`, `upsertEntityWithFullColumn()`, `selectBiz()` |
-| **Service(Manager) 공통 / 상태전이** | `FRAME-CORE` | `core/src/main/java/.../mes/core/abstracts/business/CoreManager.java` | `getDbContext()`, `setCommonData()`, `checkStateTransition()` |
-| **Controller 응답 / DataDic 처리** | `FRAME-CORE` | `core/src/main/java/.../mes/core/abstracts/business/CoreController.java` | `setDatadic()`, `getRequestData()`, `getReplytData()` |
-| **웹 인증 / 세션 / 보안 필터** | `MES-CORE` | `core/src/main/java/.../mes/core/web/filter/` | `SecurityWebFilter`, `LoginSessionWebFilter`, `AccessWebFilter` |
-| **로그인 / 토큰 발급 컨트롤러** | `MES-CORE` | `core/src/main/java/.../mes/core/web/login/LoginController.java` | `LoginTokenUtility`, `AzureOpenIdLoginController` |
-| **MyBatis XML 매퍼 위치** | `MES-CORE` | `core/src/main/resources/sql/` | `mssql/api/`, `mssql/core/`, `oracle/`, `postgresql/` |
+| 질문 | 모듈 상대 경로 | 핵심 심볼 |
+|---|---|---|
+| Factory 초기화·구현 선택 | `framework/api/.../framework/api/Factory.java` | initialize, destroy, getAndInitialize |
+| 클래스 탐색·패키지 필터 | `framework/api/.../framework/api/Environment.java` | PACKAGE_PREFIX_SET, putClassSet |
+| 공개 Factory API | `framework/api/.../framework/api/interfaces/factory/` | InterfaceBusinessFactory, InterfaceConnectorFactory, InterfaceContextFactory |
+| 요청·commit/rollback | `framework/iia/.../framework/iia/abstracts/entry/BaseDispatcher.java` | executeInternal, preExecute, commit, rollback |
+| Processor 기본 구현 | `framework/iia/.../framework/iia/abstracts/entry/BaseProcessor.java` | setStartTime, setEndTime |
+| 트랜잭션·실패 처리 | `framework/iia/.../framework/iia/abstracts/context/BaseTransaction.java` | initialize, commit, rollback, close, decreseCounter |
+| 독립 트랜잭션·ID 의존성 | `framework/iia/.../framework/iia/materialze/context/SeparatedTransaction.java` | makeTransactionId |
+| 업무 검증·실행 | `framework/core/.../mes/core/abstracts/business/CoreRule.java` | messageValidation, process |
+| 공통 컬럼·touched | `framework/core/.../mes/core/abstracts/business/CoreEntity.java` | CORE_COLUMN_LIST, getAllColumnsExceptCore |
+| CRUD·논리삭제·Hist | `framework/core/.../mes/core/abstracts/business/CoreRepository.java` | selectBiz, deleteBiz, realDelete, upsertEntityWithFullColumn |
+| Service·상태전이 | `framework/core/.../mes/core/abstracts/business/CoreManager.java` | getDbContext, setCommonData, checkStateTransition |
+| Controller 응답 | `framework/core/.../mes/core/abstracts/business/CoreController.java` | setDatadic, getRequestData, getReplytData |
+| 웹 인증 필터 | `core/.../mes/core/web/filter/` | SecurityWebFilter, LoginSessionWebFilter, AccessWebFilter |
+| 로그인·SSO | `core/.../mes/core/web/login/`, `web/sso/` | LoginController, AzureOpenIdLoginController |
+| API 권한·캐시 | `core/.../mes/core/common/authorization/` | ApiAuthorizationProcessor, ApiAuthorizationManager, AuthorizationCacheManager, AuthorizationSnapshot |
+| MyBatis XML | `core/src/main/resources/sql/` | mssql, oracle, postgresql |
 
-## Quick Search Keywords for Grep / Find
-- 요청 진입점: `BaseDispatcher`, `WebDispatcher`, `InterfaceProcessor`
-- 비즈니스 로직: `CoreRule`, `CoreController`, `CoreManager`, `BusinessUtility`, `DbContext`
-- 영속성/DB: `CoreRepository`, `BaseTransaction`, `JpaRepository`, `MybatisRepository`, `SqlMaker`
-- 엔티티/도메인: `CoreEntity`, `CORE_COLUMN_LIST`, `touchedColumns`, `IsUsable`
-- 상태/옵션셋: `LotState`, `EquipmentState` (`common/state/`), `TrackIn`, `TrackOut` (`common/optionset/`)
+## Verification
+
+2026-09-08 로컬 소스 경로를 기준으로 framework 접두사 누락과 두 core 모듈의 경계를 정리했다. 버전·checkout이 바뀌면 `rg --files`로 실제 위치를 다시 찾는다. 실행 계약은 [architecture](architecture.md), [lifecycle](runtime-lifecycle.md), [persistence](persistence-and-transaction.md), [extension](extension-contracts-and-invariants.md)에 분리한다.
