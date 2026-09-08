@@ -5,7 +5,8 @@
 # - Links shared skills only for installed agents.
 # - Rebuilds the shared rule aggregator from canonical rule files.
 # - Deploys shared memory instructions + shared rules without overwriting user content.
-# - Uses a Cursor local plugin for reliable file-backed global Cursor rules.
+# - Copies the Cursor local plugin into ~/.cursor/plugins/local because Cursor may ignore
+#   symlinks/junctions that point outside that directory.
 
 $ErrorActionPreference = "Stop"
 
@@ -188,17 +189,20 @@ function Remove-LegacyJunctionIfOwned {
         [Parameter(Mandatory = $true)][string]$ExpectedTarget
     )
 
-    if (-not (Test-Path $Path)) { return }
+    if (-not (Test-Path $Path)) { return $true }
     $item = Get-Item $Path -Force
-    if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") { return }
+    if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") { return $true }
 
     foreach ($target in @($item.Target)) {
         if (Test-SamePath -PathA $target -PathB $ExpectedTarget) {
             Remove-Item $Path -Force
             Write-Host "[CLEAN] Removed legacy AI_MEMORY junction: $Path"
-            return
+            return $true
         }
     }
+
+    Write-Warning "A different link already exists and was not changed: $Path"
+    return $false
 }
 
 function Remove-LegacyManagedFileIfOwned {
@@ -256,6 +260,35 @@ function Set-ManagedInstructionBlock {
     [IO.File]::WriteAllText($Path, $newContent, (New-Object Text.UTF8Encoding($false)))
 }
 
+function Install-CursorLocalPlugin {
+    param(
+        [Parameter(Mandatory = $true)][string]$CursorHome,
+        [Parameter(Mandatory = $true)][string]$ManifestContent,
+        [Parameter(Mandatory = $true)][string]$RuleContent
+    )
+
+    $installRoot = Join-Path $CursorHome "plugins\local\ai-memory"
+
+    if (-not (Remove-LegacyJunctionIfOwned -Path $installRoot -ExpectedTarget $CursorPluginRoot)) {
+        Write-Warning "Cursor local plugin install skipped because the destination is a different link."
+        return
+    }
+
+    if (-not (Test-Path $installRoot)) {
+        New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
+    }
+
+    $installItem = Get-Item $installRoot -Force
+    if ($installItem.LinkType -eq "Junction" -or $installItem.LinkType -eq "SymbolicLink") {
+        Write-Warning "Cursor local plugin destination is still a link and was not modified: $installRoot"
+        return
+    }
+
+    Set-TextFileIfChanged -Path (Join-Path $installRoot ".cursor-plugin\plugin.json") -Content $ManifestContent -Label "Cursor local plugin manifest"
+    Set-TextFileIfChanged -Path (Join-Path $installRoot "rules\ai-memory.mdc") -Content $RuleContent -Label "Cursor local plugin rule"
+    Write-Host "[OK]   Cursor local plugin copied as real files: $installRoot"
+}
+
 Write-Host ""
 Write-Host "=== AI_MEMORY Setup ==="
 Write-Host "Repository: $RepoRoot"
@@ -290,6 +323,7 @@ $globalInstruction = $globalInstruction.Trim()
 $managedInstruction = $globalInstruction + "`r`n`r`n" + $rulesAggregator.Trim()
 $cursorPluginRule = Get-CursorPluginRuleContent -Content $managedInstruction
 Set-TextFileIfChanged -Path $CursorPluginRulePath -Content $cursorPluginRule -Label "Cursor plugin global rule adapter"
+$cursorPluginManifestContent = [string](Get-Content $CursorPluginManifest -Raw -Encoding UTF8)
 
 $currentHome = [Environment]::GetEnvironmentVariable("AI_MEMORY_HOME", "User")
 if ([string]::IsNullOrWhiteSpace($currentHome) -or -not (Test-SamePath -PathA $currentHome -PathB $RepoRoot)) {
@@ -363,10 +397,10 @@ if ($antigravityInstalled) { $agentSkillRoots["Antigravity"] = Join-Path $antigr
 $agentMemorySource = Join-Path $SkillsRoot "agent-memory"
 if (Test-Path $agentMemorySource) {
     if ($codexInstalled) {
-        Remove-LegacyJunctionIfOwned -Path (Join-Path $codexHome "skills\agent-memory") -ExpectedTarget $agentMemorySource
+        Remove-LegacyJunctionIfOwned -Path (Join-Path $codexHome "skills\agent-memory") -ExpectedTarget $agentMemorySource | Out-Null
     }
     if ($cursorInstalled) {
-        Remove-LegacyJunctionIfOwned -Path (Join-Path $cursorHome "skills\agent-memory") -ExpectedTarget $agentMemorySource
+        Remove-LegacyJunctionIfOwned -Path (Join-Path $cursorHome "skills\agent-memory") -ExpectedTarget $agentMemorySource | Out-Null
     }
 }
 
@@ -391,9 +425,7 @@ if ($codexInstalled) {
 
 if ($cursorInstalled) {
     Remove-LegacyManagedFileIfOwned -Path (Join-Path $cursorHome "rules\ai-memory.mdc")
-    $cursorPluginLink = Join-Path $cursorHome "plugins\local\ai-memory"
-    Ensure-Junction -Label "Cursor AI_MEMORY local plugin" -JunctionPath $cursorPluginLink -TargetPath $CursorPluginRoot
-    Write-Host "[OK]   Cursor global rules use local plugin adapter"
+    Install-CursorLocalPlugin -CursorHome $cursorHome -ManifestContent $cursorPluginManifestContent -RuleContent $cursorPluginRule
 } else { Write-Host "[SKIP] Cursor global rule plugin" }
 
 if ($claudeInstalled) {
@@ -410,4 +442,7 @@ Write-Host "=== Setup Complete ==="
 Write-Host "AI_MEMORY_HOME: $RepoRoot"
 Write-Host "Global skills: $($skillDirectories.Count)"
 Write-Host "Shared rules: $($RuleSourceNames.Count)"
+if ($cursorInstalled) {
+    Write-Host "Cursor: reload the window after setup. If the local plugin is still invisible, verify local plugin imports are allowed by Cursor/team policy."
+}
 Write-Host "Restart running agents if they do not detect the changes immediately."
