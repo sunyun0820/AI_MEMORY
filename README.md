@@ -30,6 +30,13 @@ AI_MEMORY/
 │  ├─ engineering-principles.md
 │  └─ RULES.md
 │
+├─ adapters/
+│  └─ cursor-plugin/
+│     ├─ .cursor-plugin/
+│     │  └─ plugin.json
+│     └─ rules/
+│        └─ ai-memory.mdc
+│
 ├─ skills/
 │  ├─ README.md
 │  └─ agent-memory/
@@ -69,6 +76,7 @@ AI_MEMORY/
 ```text
 instructions = AI_MEMORY 자체의 공통 Agent 동작 지침
 rules        = 모든 Agent에 항상 적용할 안전·엔지니어링 규칙
+adapters     = Agent별 전역 설정 형식/배포 방식 차이를 흡수
 skills       = Agent가 특정 작업을 어떻게 수행할지 정의
 memory       = 과거 작업에서 무엇을 배웠는지 저장
 tools        = 반복 작업을 실제 스크립트/프로그램으로 실행
@@ -80,6 +88,7 @@ tools        = 반복 작업을 실제 스크립트/프로그램으로 실행
 - Agent Workflow → `skills/`
 - AI_MEMORY Recall/Learn/Tool 사용 원칙 → `instructions/`
 - 모든 Agent 공통 안전·행동 규칙 → `rules/`
+- Agent별 포맷/설치 차이 → `adapters/`
 - 반복 실행 가능한 자동화 → `tools/`
 
 `memory/rules/`는 과거 작업에서 학습한 규칙을 저장하는 Memory 분류이고, 루트의 `rules/`는 모든 Agent에 항상 배포되는 전역 Rule이므로 역할이 다릅니다.
@@ -103,7 +112,7 @@ rules/RULES.md
       ↓
 GLOBAL_AGENT_INSTRUCTIONS.md 와 결합
       ↓
-Agent별 전역 지침으로 배포
+Agent별 adapter/전역 지침으로 배포
 ```
 
 `RULES.md`는 직접 수정하지 않습니다. canonical rule 파일을 수정한 뒤 `setup.ps1`을 실행하면 자동으로 재생성됩니다.
@@ -216,22 +225,35 @@ Repository 위치는 `E:\AI_MEMORY`로 고정되지 않습니다. `setup.ps1`이
 
 1. 현재 Repository를 `AI_MEMORY_HOME` 사용자 환경변수에 등록합니다.
 2. canonical shared rules 3개를 읽어 `rules/RULES.md`를 재생성합니다.
-3. 설치된 Agent를 감지합니다.
-4. 공용 Skill을 지원되는 Agent 위치에 junction으로 연결합니다.
-5. `GLOBAL_AGENT_INSTRUCTIONS.md + RULES.md`를 하나의 AI_MEMORY managed block으로 배포합니다.
-6. 기존 Agent별 사용자 지침은 삭제하지 않습니다.
+3. `GLOBAL_AGENT_INSTRUCTIONS.md + RULES.md`를 결합합니다.
+4. Cursor용 `.mdc` adapter를 재생성합니다.
+5. 설치된 Agent를 감지합니다.
+6. 공용 Skill을 지원되는 Agent 위치에 junction으로 연결합니다.
+7. Agent별 전역 지침/adapter를 배포합니다.
+8. 기존 Agent별 사용자 지침은 삭제하지 않습니다.
 
 ### 전역 배포 위치
 
 ```text
 Codex       → ~/.codex/AGENTS.md
-Cursor      → ~/.cursor/rules/ai-memory.mdc
+Cursor      → ~/.cursor/plugins/local/ai-memory
 Claude Code → ~/.claude/CLAUDE.md
 Gemini CLI  → ~/.gemini/GEMINI.md
 Antigravity → ~/.gemini/GEMINI.md
 ```
 
-Cursor/Codex/Claude/Gemini에 기존 사용자 지침이 있으면 그대로 유지하고 다음 관리 블록만 추가 또는 갱신합니다.
+Cursor는 home-level `.cursor/rules` 직접 로딩에 의존하지 않고, Repository의 `adapters/cursor-plugin`을 **local Cursor Plugin**으로 연결합니다.
+
+```text
+~/.cursor/plugins/local/ai-memory
+        ↓ junction
+AI_MEMORY/adapters/cursor-plugin
+        └─ rules/ai-memory.mdc
+```
+
+기존 `~/.cursor/rules/ai-memory.mdc`가 과거 AI_MEMORY가 생성한 managed 파일이면 `setup.ps1`이 정리합니다.
+
+Codex/Claude/Gemini의 기존 사용자 지침은 그대로 유지하고 다음 관리 블록만 추가 또는 갱신합니다.
 
 ```text
 <!-- AI_MEMORY_MANAGED_START -->
@@ -263,10 +285,12 @@ Doctor는 다음을 검사합니다.
 - `AI_MEMORY_HOME`
 - Shared Rule 3개 존재/비어있지 않음
 - `rules/RULES.md`가 canonical source와 정확히 일치하는지
+- Cursor plugin adapter `.mdc`가 현재 원본과 정확히 일치하는지
 - Agent 감지
 - Skill junction 대상
-- Agent별 global instruction managed block 존재 여부
-- **Agent별 managed block 내용이 현재 AI_MEMORY 원본과 정확히 일치하는지**
+- Cursor local plugin junction 대상
+- Codex/Claude/Gemini managed block 존재 여부
+- **배포된 managed block 내용이 현재 AI_MEMORY 원본과 정확히 일치하는지**
 
 즉 파일만 존재한다고 PASS 처리하지 않고, stale rule/instruction도 FAIL로 판정합니다.
 
@@ -308,6 +332,7 @@ Markdown
 + Shared Global Skills
 + Shared Global Rules
 + Shared Global Instructions
++ Agent Adapters
 + Shared Agent Tools
 ```
 

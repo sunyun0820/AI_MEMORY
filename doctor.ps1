@@ -8,6 +8,9 @@ $RepoRoot = (Resolve-Path $PSScriptRoot).Path
 $RulesRoot = Join-Path $RepoRoot "rules"
 $RulesAggregatorPath = Join-Path $RulesRoot "RULES.md"
 $GlobalInstructionSource = Join-Path $RepoRoot "instructions\GLOBAL_AGENT_INSTRUCTIONS.md"
+$CursorPluginRoot = Join-Path $RepoRoot "adapters\cursor-plugin"
+$CursorPluginManifest = Join-Path $CursorPluginRoot ".cursor-plugin\plugin.json"
+$CursorPluginRulePath = Join-Path $CursorPluginRoot "rules\ai-memory.mdc"
 $RuleSourceNames = @(
     "db-safety.md",
     "git-safety.md",
@@ -116,32 +119,46 @@ function Get-ExpectedRulesAggregator {
     return ($header.Trim() + "`r`n`r`n" + $body.Trim() + "`r`n")
 }
 
-function Test-SkillLink {
+function Get-CursorPluginRuleContent {
+    param([Parameter(Mandatory = $true)][string]$Content)
+
+    return (@"
+---
+description: "AI_MEMORY shared memory, tools, and shared safety/engineering rules."
+alwaysApply: true
+---
+$ManagedStart
+$Content
+$ManagedEnd
+"@).Trim() + "`r`n"
+}
+
+function Test-Link {
     param(
-        [Parameter(Mandatory = $true)][string]$AgentName,
+        [Parameter(Mandatory = $true)][string]$Label,
         [Parameter(Mandatory = $true)][string]$LinkPath,
         [Parameter(Mandatory = $true)][string]$TargetPath
     )
 
     if (-not (Test-Path $LinkPath)) {
-        Write-DoctorResult FAIL "$AgentName skill link missing: $LinkPath"
+        Write-DoctorResult FAIL "$Label missing: $LinkPath"
         return
     }
 
     $item = Get-Item $LinkPath -Force
     if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") {
-        Write-DoctorResult FAIL "$AgentName skill path is not a link: $LinkPath"
+        Write-DoctorResult FAIL "$Label is not a link: $LinkPath"
         return
     }
 
     foreach ($target in @($item.Target)) {
         if (Test-SamePath -PathA $target -PathB $TargetPath) {
-            Write-DoctorResult OK "$AgentName skill linked: $($item.Name)"
+            Write-DoctorResult OK "$Label"
             return
         }
     }
 
-    Write-DoctorResult FAIL "$AgentName skill target mismatch: $LinkPath"
+    Write-DoctorResult FAIL "$Label target mismatch: $LinkPath"
 }
 
 function Test-ManagedInstruction {
@@ -203,6 +220,8 @@ $requiredPaths = @(
     "rules\db-safety.md",
     "rules\git-safety.md",
     "rules\engineering-principles.md",
+    "adapters\cursor-plugin\.cursor-plugin\plugin.json",
+    "adapters\cursor-plugin\rules\ai-memory.mdc",
     "skills",
     "memory",
     "tools",
@@ -302,6 +321,37 @@ foreach ($ruleName in $RuleSourceNames) {
 }
 
 Write-Host ""
+Write-Host "=== Generated Adapters ==="
+if (-not (Test-Path $GlobalInstructionSource -PathType Leaf)) {
+    Write-DoctorResult FAIL "Global instruction source missing: $GlobalInstructionSource"
+    $expectedManagedInstruction = ""
+}
+elseif ($null -eq $expectedRulesAggregator) {
+    Write-DoctorResult FAIL "Cannot build expected managed instruction because shared rules are invalid"
+    $expectedManagedInstruction = ""
+}
+else {
+    $globalInstruction = [string](Get-Content $GlobalInstructionSource -Raw -Encoding UTF8)
+    $expectedManagedInstruction = $globalInstruction.Trim() + "`r`n`r`n" + $expectedRulesAggregator.Trim()
+}
+
+if (-not [string]::IsNullOrWhiteSpace($expectedManagedInstruction)) {
+    $expectedCursorPluginRule = Get-CursorPluginRuleContent -Content $expectedManagedInstruction
+    if (-not (Test-Path $CursorPluginRulePath -PathType Leaf)) {
+        Write-DoctorResult FAIL "Cursor plugin rule adapter missing: $CursorPluginRulePath"
+    }
+    else {
+        $actualCursorPluginRule = [string](Get-Content $CursorPluginRulePath -Raw -Encoding UTF8)
+        if ((Normalize-Text $actualCursorPluginRule) -eq (Normalize-Text $expectedCursorPluginRule)) {
+            Write-DoctorResult OK "Cursor plugin rule adapter matches AI_MEMORY source"
+        }
+        else {
+            Write-DoctorResult FAIL "Cursor plugin rule adapter is stale; run setup.ps1"
+        }
+    }
+}
+
+Write-Host ""
 Write-Host "=== Skills / Tools ==="
 $skillsRoot = Join-Path $RepoRoot "skills"
 $skillDirectories = @(
@@ -374,46 +424,35 @@ Write-Host ""
 Write-Host "=== Skill Links ==="
 if ($codexInstalled -or $cursorInstalled) {
     foreach ($skill in $skillDirectories) {
-        Test-SkillLink -AgentName "Codex + Cursor" -LinkPath (Join-Path $HOME ".agents\skills\$($skill.Name)") -TargetPath $skill.FullName
+        Test-Link -Label "Codex + Cursor skill $($skill.Name)" -LinkPath (Join-Path $HOME ".agents\skills\$($skill.Name)") -TargetPath $skill.FullName
     }
 }
 else { Write-DoctorResult SKIP "Codex + Cursor skill checks" }
 
 if ($claudeInstalled) {
     foreach ($skill in $skillDirectories) {
-        Test-SkillLink -AgentName "Claude Code" -LinkPath (Join-Path $claudeHome "skills\$($skill.Name)") -TargetPath $skill.FullName
+        Test-Link -Label "Claude Code skill $($skill.Name)" -LinkPath (Join-Path $claudeHome "skills\$($skill.Name)") -TargetPath $skill.FullName
     }
 }
 else { Write-DoctorResult SKIP "Claude Code skill checks" }
 
 if ($antigravityInstalled) {
     foreach ($skill in $skillDirectories) {
-        Test-SkillLink -AgentName "Antigravity" -LinkPath (Join-Path $antigravityConfigHome "skills\$($skill.Name)") -TargetPath $skill.FullName
+        Test-Link -Label "Antigravity skill $($skill.Name)" -LinkPath (Join-Path $antigravityConfigHome "skills\$($skill.Name)") -TargetPath $skill.FullName
     }
 }
 else { Write-DoctorResult SKIP "Antigravity skill checks" }
 
 Write-Host ""
 Write-Host "=== Global Instructions + Shared Rules ==="
-if (-not (Test-Path $GlobalInstructionSource -PathType Leaf)) {
-    Write-DoctorResult FAIL "Global instruction source missing: $GlobalInstructionSource"
-    $expectedManagedInstruction = ""
-}
-elseif ($null -eq $expectedRulesAggregator) {
-    Write-DoctorResult FAIL "Cannot build expected managed instruction because shared rules are invalid"
-    $expectedManagedInstruction = ""
-}
-else {
-    $globalInstruction = [string](Get-Content $GlobalInstructionSource -Raw -Encoding UTF8)
-    $expectedManagedInstruction = $globalInstruction.Trim() + "`r`n`r`n" + $expectedRulesAggregator.Trim()
-}
-
 if (-not [string]::IsNullOrWhiteSpace($expectedManagedInstruction)) {
     if ($codexInstalled) { Test-ManagedInstruction -AgentName "Codex" -Path (Join-Path $codexHome "AGENTS.md") -ExpectedContent $expectedManagedInstruction }
     else { Write-DoctorResult SKIP "Codex global instruction" }
 
-    if ($cursorInstalled) { Test-ManagedInstruction -AgentName "Cursor" -Path (Join-Path $cursorHome "rules\ai-memory.mdc") -ExpectedContent $expectedManagedInstruction }
-    else { Write-DoctorResult SKIP "Cursor global instruction" }
+    if ($cursorInstalled) {
+        Test-Link -Label "Cursor AI_MEMORY local plugin" -LinkPath (Join-Path $cursorHome "plugins\local\ai-memory") -TargetPath $CursorPluginRoot
+    }
+    else { Write-DoctorResult SKIP "Cursor global rule plugin" }
 
     if ($claudeInstalled) { Test-ManagedInstruction -AgentName "Claude Code" -Path (Join-Path $claudeHome "CLAUDE.md") -ExpectedContent $expectedManagedInstruction }
     else { Write-DoctorResult SKIP "Claude Code global instruction" }

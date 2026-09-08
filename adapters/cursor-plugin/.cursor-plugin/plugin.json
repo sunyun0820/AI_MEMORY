@@ -1,0 +1,8 @@
+{
+  "name": "ai-memory",
+  "description": "Shared AI_MEMORY rules, memory guidance, and engineering safety constraints.",
+  "version": "1.0.0",
+  "author": {
+    "name": "sunyun0820"
+  }
+}

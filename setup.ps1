@@ -5,6 +5,7 @@
 # - Links shared skills only for installed agents.
 # - Rebuilds the shared rule aggregator from canonical rule files.
 # - Deploys shared memory instructions + shared rules without overwriting user content.
+# - Uses a Cursor local plugin for reliable file-backed global Cursor rules.
 
 $ErrorActionPreference = "Stop"
 
@@ -13,6 +14,9 @@ $SkillsRoot = Join-Path $RepoRoot "skills"
 $GlobalInstructionSource = Join-Path $RepoRoot "instructions\GLOBAL_AGENT_INSTRUCTIONS.md"
 $RulesRoot = Join-Path $RepoRoot "rules"
 $RulesAggregatorPath = Join-Path $RulesRoot "RULES.md"
+$CursorPluginRoot = Join-Path $RepoRoot "adapters\cursor-plugin"
+$CursorPluginManifest = Join-Path $CursorPluginRoot ".cursor-plugin\plugin.json"
+$CursorPluginRulePath = Join-Path $CursorPluginRoot "rules\ai-memory.mdc"
 $RuleSourceNames = @(
     "db-safety.md",
     "git-safety.md",
@@ -104,6 +108,20 @@ function Get-ExpectedRulesAggregator {
     return ($header.Trim() + "`r`n`r`n" + $body.Trim() + "`r`n")
 }
 
+function Get-CursorPluginRuleContent {
+    param([Parameter(Mandatory = $true)][string]$Content)
+
+    return (@"
+---
+description: "AI_MEMORY shared memory, tools, and shared safety/engineering rules."
+alwaysApply: true
+---
+$ManagedStart
+$Content
+$ManagedEnd
+"@).Trim() + "`r`n"
+}
+
 function Set-TextFileIfChanged {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -133,7 +151,7 @@ function Set-TextFileIfChanged {
 
 function Ensure-Junction {
     param(
-        [Parameter(Mandatory = $true)][string]$AgentName,
+        [Parameter(Mandatory = $true)][string]$Label,
         [Parameter(Mandatory = $true)][string]$JunctionPath,
         [Parameter(Mandatory = $true)][string]$TargetPath
     )
@@ -148,20 +166,20 @@ function Ensure-Junction {
         if ($item.LinkType -eq "Junction" -or $item.LinkType -eq "SymbolicLink") {
             foreach ($target in @($item.Target)) {
                 if (Test-SamePath -PathA $target -PathB $TargetPath) {
-                    Write-Host "[OK]   $AgentName skill already linked: $($item.Name)"
+                    Write-Host "[OK]   $Label already linked"
                     return
                 }
             }
-            Write-Warning "$AgentName has a different link at: $JunctionPath"
+            Write-Warning "$Label has a different link at: $JunctionPath"
             return
         }
 
-        Write-Warning "$AgentName has a real file/directory at: $JunctionPath"
+        Write-Warning "$Label has a real file/directory at: $JunctionPath"
         return
     }
 
     New-Item -ItemType Junction -Path $JunctionPath -Target $TargetPath | Out-Null
-    Write-Host "[OK]   $AgentName skill linked: $(Split-Path $JunctionPath -Leaf)"
+    Write-Host "[OK]   $Label linked: $JunctionPath"
 }
 
 function Remove-LegacyJunctionIfOwned {
@@ -180,6 +198,18 @@ function Remove-LegacyJunctionIfOwned {
             Write-Host "[CLEAN] Removed legacy AI_MEMORY junction: $Path"
             return
         }
+    }
+}
+
+function Remove-LegacyManagedFileIfOwned {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path $Path -PathType Leaf)) { return }
+
+    $content = [string](Get-Content $Path -Raw -Encoding UTF8)
+    if ($content.Contains($ManagedStart) -and $content.Contains($ManagedEnd)) {
+        Remove-Item $Path -Force
+        Write-Host "[CLEAN] Removed legacy AI_MEMORY managed file: $Path"
     }
 }
 
@@ -226,45 +256,6 @@ function Set-ManagedInstructionBlock {
     [IO.File]::WriteAllText($Path, $newContent, (New-Object Text.UTF8Encoding($false)))
 }
 
-function Set-CursorManagedRule {
-    param(
-        [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][string]$Content
-    )
-
-    $parent = Split-Path $Path -Parent
-    if (-not (Test-Path $parent)) {
-        New-Item -ItemType Directory -Path $parent -Force | Out-Null
-    }
-
-    $generated = @"
----
-description: "Use AI_MEMORY shared memory, tools, and shared safety/engineering rules."
-alwaysApply: true
----
-$ManagedStart
-$Content
-$ManagedEnd
-"@
-
-    if (Test-Path $Path) {
-        $existing = ""
-        $readContent = Get-Content $Path -Raw -Encoding UTF8
-        if ($null -ne $readContent) { $existing = [string]$readContent }
-
-        if (-not $existing.Contains($ManagedStart) -or -not $existing.Contains($ManagedEnd)) {
-            Write-Warning "Cursor rule exists but is not managed by AI_MEMORY. Skipped: $Path"
-            return
-        }
-        Write-Host "[UPDATE] Cursor global rule"
-    }
-    else {
-        Write-Host "[SET]  Cursor global rule"
-    }
-
-    [IO.File]::WriteAllText($Path, $generated.Trim() + "`r`n", (New-Object Text.UTF8Encoding($false)))
-}
-
 Write-Host ""
 Write-Host "=== AI_MEMORY Setup ==="
 Write-Host "Repository: $RepoRoot"
@@ -282,6 +273,10 @@ if (-not (Test-Path $RulesRoot -PathType Container)) {
     Write-Error "Rules directory not found: $RulesRoot"
     exit 1
 }
+if (-not (Test-Path $CursorPluginManifest -PathType Leaf)) {
+    Write-Error "Cursor plugin manifest not found: $CursorPluginManifest"
+    exit 1
+}
 
 Write-Host "=== Shared Rules ==="
 $rulesAggregator = Get-ExpectedRulesAggregator
@@ -289,6 +284,12 @@ Set-TextFileIfChanged -Path $RulesAggregatorPath -Content $rulesAggregator -Labe
 foreach ($ruleName in $RuleSourceNames) {
     Write-Host "[OK]   Rule source: rules\$ruleName"
 }
+
+$globalInstruction = [string](Get-Content $GlobalInstructionSource -Raw -Encoding UTF8)
+$globalInstruction = $globalInstruction.Trim()
+$managedInstruction = $globalInstruction + "`r`n`r`n" + $rulesAggregator.Trim()
+$cursorPluginRule = Get-CursorPluginRuleContent -Content $managedInstruction
+Set-TextFileIfChanged -Path $CursorPluginRulePath -Content $cursorPluginRule -Label "Cursor plugin global rule adapter"
 
 $currentHome = [Environment]::GetEnvironmentVariable("AI_MEMORY_HOME", "User")
 if ([string]::IsNullOrWhiteSpace($currentHome) -or -not (Test-SamePath -PathA $currentHome -PathB $RepoRoot)) {
@@ -374,7 +375,7 @@ if ($skillDirectories.Count -gt 0 -and $agentSkillRoots.Count -gt 0) {
     Write-Host "=== Skill Junctions ==="
     foreach ($skill in $skillDirectories) {
         foreach ($agent in $agentSkillRoots.GetEnumerator()) {
-            Ensure-Junction -AgentName $agent.Key -JunctionPath (Join-Path $agent.Value $skill.Name) -TargetPath $skill.FullName
+            Ensure-Junction -Label "$($agent.Key) skill $($skill.Name)" -JunctionPath (Join-Path $agent.Value $skill.Name) -TargetPath $skill.FullName
         }
     }
 }
@@ -384,17 +385,16 @@ else {
 
 Write-Host ""
 Write-Host "=== Global Instructions + Shared Rules ==="
-$globalInstruction = [string](Get-Content $GlobalInstructionSource -Raw -Encoding UTF8)
-$globalInstruction = $globalInstruction.Trim()
-$managedInstruction = $globalInstruction + "`r`n`r`n" + $rulesAggregator.Trim()
-
 if ($codexInstalled) {
     Set-ManagedInstructionBlock -AgentName "Codex" -Path (Join-Path $codexHome "AGENTS.md") -Content $managedInstruction
 } else { Write-Host "[SKIP] Codex global instruction" }
 
 if ($cursorInstalled) {
-    Set-CursorManagedRule -Path (Join-Path $cursorHome "rules\ai-memory.mdc") -Content $managedInstruction
-} else { Write-Host "[SKIP] Cursor global instruction" }
+    Remove-LegacyManagedFileIfOwned -Path (Join-Path $cursorHome "rules\ai-memory.mdc")
+    $cursorPluginLink = Join-Path $cursorHome "plugins\local\ai-memory"
+    Ensure-Junction -Label "Cursor AI_MEMORY local plugin" -JunctionPath $cursorPluginLink -TargetPath $CursorPluginRoot
+    Write-Host "[OK]   Cursor global rules use local plugin adapter"
+} else { Write-Host "[SKIP] Cursor global rule plugin" }
 
 if ($claudeInstalled) {
     Set-ManagedInstructionBlock -AgentName "Claude Code" -Path (Join-Path $claudeHome "CLAUDE.md") -Content $managedInstruction
