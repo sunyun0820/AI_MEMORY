@@ -1,6 +1,6 @@
 # AI_MEMORY
 
-Codex, Cursor, Claude Code, Gemini/Antigravity 등 여러 개발 에이전트가 **공용 장기 메모리, 전역 Skill, 공용 Rule, 전역 지침, 반복 작업 Tool**을 한 저장소에서 공유하기 위한 개인 Agent Runtime 저장소입니다.
+Codex, Cursor, Claude Code, Gemini/Antigravity 등 여러 개발 Agent가 **공용 장기 메모리, 전역 Skill, 공용 Rule, 전역 지침, 반복 작업 Tool**을 한 저장소에서 공유하기 위한 개인 Agent Runtime 저장소입니다.
 
 ## 목표
 
@@ -35,19 +35,15 @@ AI_MEMORY/
 │     ├─ .cursor-plugin/
 │     │  └─ plugin.json
 │     └─ rules/
-│        └─ ai-memory.mdc
+│        ├─ db-safety.mdc
+│        ├─ git-safety.mdc
+│        └─ engineering-principles.mdc
 │
 ├─ skills/
 │  └─ agent-memory/
 │     └─ SKILL.md
 │
 ├─ memory/
-│  ├─ rules/
-│  ├─ lessons/
-│  ├─ incidents/
-│  ├─ projects/
-│  └─ archive/
-│
 ├─ tools/
 ├─ templates/
 └─ scripts/
@@ -57,7 +53,7 @@ AI_MEMORY/
 
 ```text
 instructions = AI_MEMORY 자체의 공통 Agent 동작 지침
-rules        = 모든 Agent에 항상 적용할 안전·엔지니어링 규칙
+rules        = 모든 Agent에 항상 적용할 안전·엔지니어링 규칙 원본
 adapters     = Agent별 전역 설정 형식/배포 방식 차이를 흡수
 skills       = Agent가 특정 작업을 어떻게 수행할지 정의
 memory       = 과거 작업에서 무엇을 배웠는지 저장
@@ -78,17 +74,26 @@ rules/engineering-principles.md
 
 `rules/RULES.md`는 위 세 파일을 합친 배포용 aggregator이며 직접 수정하지 않습니다.
 
+## Agent별 배포
+
 ```text
 canonical rules
-      ↓
-rules/RULES.md
-      ↓
-GLOBAL_AGENT_INSTRUCTIONS.md 와 결합
-      ↓
-Agent별 전역 지침/adapter로 배포
+      │
+      ├─ Codex / Claude / Gemini 계열
+      │      ↓
+      │   RULES.md + GLOBAL_AGENT_INSTRUCTIONS.md
+      │
+      └─ Cursor
+             ↓
+          local plugin
+             ├─ db-safety.mdc
+             ├─ git-safety.mdc
+             └─ engineering-principles.mdc
 ```
 
-Rule을 수정한 뒤 `setup.ps1`을 실행하면 aggregator와 Agent별 배포본이 갱신됩니다.
+Cursor에서는 `agent-memory` Skill이 Memory Recall/Learn 동작을 담당하고, 공용 안전 Rule 3개는 local plugin의 독립된 `alwaysApply` Rule 3개로 배포합니다.
+
+따라서 Cursor `Customize → Plugins`에는 **Ai Memory 플러그인 1개**가 보이는 것이 정상이고, `Customize → Rules`에는 AI_MEMORY가 제공하는 **Rule 3개**가 별도로 보여야 정상입니다.
 
 # Agent 기본 흐름
 
@@ -114,22 +119,11 @@ Rule을 수정한 뒤 `setup.ps1`을 실행하면 aggregator와 Agent별 배포�
 
 ### Recall = 자동
 
-과거 프로젝트 경험이 현재 판단에 도움 될 가능성이 있는 비단순 엔지니어링 작업에서는 관련 Memory를 선택적으로 조회합니다.
-
-전체 Memory를 매번 읽지 않습니다.
+과거 프로젝트 경험이 현재 판단에 도움 될 가능성이 있는 비단순 엔지니어링 작업에서는 관련 Memory를 선택적으로 조회합니다. 전체 Memory를 매번 읽지 않습니다.
 
 ### Learn = 사용자 명시 요청
 
-작업 완료 자체는 Memory 저장 권한이 아닙니다.
-
-다음처럼 사용자가 명시했을 때만 저장/갱신합니다.
-
-```text
-"이거 기억해"
-"이번 해결 방법 메모리에 남겨"
-"기존 메모리 업데이트해"
-"이 실수 학습해"
-```
+작업 완료 자체는 Memory 저장 권한이 아닙니다. `기억해`, `메모리에 남겨`, `저장해`, `업데이트해`처럼 사용자가 명시적으로 요청한 경우에만 저장/갱신합니다.
 
 세부 기준은 `MEMORY_POLICY.md`를 따릅니다.
 
@@ -151,15 +145,6 @@ Tool 실행
 요약 결과만 Agent가 분석
 ```
 
-Tool의 `safety`는 다음 네 값 중 하나입니다.
-
-- `read-only`
-- `write-local`
-- `destructive`
-- `external`
-
-Tool이 존재한다는 사실 자체는 `destructive` 또는 `external` 작업의 실행 권한을 의미하지 않습니다.
-
 # 설치
 
 ```powershell
@@ -174,14 +159,14 @@ Repository 위치는 고정되지 않습니다. `setup.ps1`이 현재 Repository
 
 ## setup.ps1 동작
 
-1. `AI_MEMORY_HOME` 등록
-2. canonical shared rules 3개 검증
-3. `rules/RULES.md` 재생성
-4. `GLOBAL_AGENT_INSTRUCTIONS.md + RULES.md` 결합
+1. canonical shared rules 3개 검증
+2. `rules/RULES.md` 재생성
+3. Cursor용 `.mdc` Rule 3개 재생성
+4. `AI_MEMORY_HOME` 등록
 5. 설치된 Agent 감지
 6. 공용 Skill 연결
-7. Agent별 전역 지침/adapter 배포
-8. 기존 사용자 지침은 가능한 범위에서 보존
+7. Agent별 전역 지침/Rule 배포
+8. 구버전 Cursor junction 또는 통합 `ai-memory.mdc`를 AI_MEMORY 소유인 경우에만 안전하게 정리
 
 ## 전역 배포 위치
 
@@ -203,27 +188,19 @@ Codex/Claude/Gemini 계열은 기존 파일 안에 다음 관리 블록만 추�
 
 # Cursor 배포 방식
 
-Cursor는 일반적인 `~/.cursor/rules/*.mdc`를 모든 프로젝트의 전역 Rule로 안정적으로 로딩하는 방식에 의존하지 않습니다.
-
-AI_MEMORY는 Cursor 전역 Rule을 **local Cursor Plugin**으로 배포합니다.
-
-중요: Cursor 최신 빌드에서는 `~/.cursor/plugins/local/` 바깥을 가리키는 symlink/junction이 로드되지 않는 사례가 있으므로, `setup.ps1`은 plugin을 junction으로 연결하지 않고 다음 위치에 **실제 파일로 복사**합니다.
+Cursor 전역 Rule은 local plugin으로 배포합니다.
 
 ```text
 ~/.cursor/plugins/local/ai-memory/
 ├─ .cursor-plugin/
 │  └─ plugin.json
 └─ rules/
-   └─ ai-memory.mdc
+   ├─ db-safety.mdc
+   ├─ git-safety.mdc
+   └─ engineering-principles.mdc
 ```
 
-원본은 계속 다음 위치에서 관리합니다.
-
-```text
-AI_MEMORY/adapters/cursor-plugin/
-```
-
-따라서 Rule 변경 또는 `git pull` 후에는 `setup.ps1`을 다시 실행해야 Cursor 배포본이 동기화됩니다.
+`setup.ps1`은 이 경로를 junction으로 두지 않고 실제 파일로 복사합니다. Rule 변경 또는 `git pull` 후에는 `setup.ps1`을 다시 실행하면 됩니다.
 
 ```powershell
 git pull
@@ -231,19 +208,30 @@ git pull
 .\doctor.ps1
 ```
 
-그 후 Cursor에서 `Developer: Reload Window`를 실행합니다.
+그 후 Cursor가 실행 중이면 `Developer: Reload Window`를 실행합니다.
 
-### Cursor plugin이 Customize에 보이지 않을 때
+## Cursor 확인 기준
 
-다음을 확인합니다.
+정상 상태:
+
+```text
+Customize → Plugins
+└─ Ai Memory (Local)            1개
+
+Customize → Rules
+├─ DB Safety 계열               1개
+├─ Git Safety 계열              1개
+└─ Engineering Principles 계열  1개
+```
+
+기존에 `Customize → Rules`에 사용자가 직접 만든 동일 내용의 User Rule 3개가 있다면, AI_MEMORY의 plugin Rule 3개가 정상 표시되고 `doctor.ps1`이 PASS한 뒤 삭제해야 중복 적용을 피할 수 있습니다.
+
+### Cursor plugin이 보이지 않을 때
 
 1. `Settings → Agents → Include Third-Party Plugins, Skills, and Other Configs`가 ON인지 확인
 2. `~/.cursor/plugins/local/ai-memory/.cursor-plugin/plugin.json`이 실제 파일인지 확인
 3. `Developer: Reload Window` 실행
-4. Teams/Enterprise 계정이면 조직 관리자가 **Allow Local Plugin Imports**를 허용했는지 확인
-5. 그래도 안 보이면 `Developer: Toggle Developer Tools → Console`에서 `plugin` 관련 오류 확인
-
-조직 정책이 local plugin import를 막고 있으면 파일이 정상이어도 Cursor가 해당 폴더를 무시할 수 있습니다.
+4. Teams/Enterprise 계정이면 조직 정책에서 Local Plugin Imports가 허용되는지 확인
 
 # Doctor
 
@@ -255,16 +243,16 @@ Doctor는 다음을 검사합니다.
 
 - 필수 Repository 구조
 - `AI_MEMORY_HOME`
-- Shared Rule 3개 존재/비어있지 않음
-- `rules/RULES.md`가 canonical source와 일치하는지
-- Cursor adapter 원본이 최신인지
-- Agent 감지
-- Skill junction 대상
-- Codex/Claude/Gemini managed block 내용 일치 여부
-- Cursor local plugin이 **junction이 아닌 실제 폴더**인지
-- Cursor local plugin의 manifest/rule 복사본이 AI_MEMORY 원본과 일치하는지
+- canonical Shared Rule 3개 존재 및 내용
+- `rules/RULES.md` 동기화 상태
+- Cursor adapter Rule 3개 동기화 상태
+- Cursor local plugin이 junction이 아닌 실제 폴더인지
+- Cursor plugin manifest와 설치된 Rule 3개가 AI_MEMORY 원본과 일치하는지
+- 구버전 통합 `ai-memory.mdc`가 제거되었는지
+- Agent 감지 및 Skill junction
+- Codex/Claude/Gemini managed block 동기화 상태
 
-Doctor는 Cursor 애플리케이션 내부의 조직 정책까지 판정하지는 못합니다. 파일 검증이 PASS인데 Customize에 plugin이 없다면 Cursor의 local plugin import 설정/조직 정책/클라이언트 로딩 문제를 확인해야 합니다.
+Doctor는 Cursor UI 내부의 조직 정책까지 판정하지는 못합니다.
 
 # 다른 PC에서 사용
 
@@ -289,9 +277,7 @@ git pull
 
 # Git 운영
 
-Memory, Skill, Tool, 공용 Rule, 전역 지침은 Git으로 동기화하고 변경 이력을 관리합니다.
-
-AI가 Memory를 작성했다고 해서 commit/push까지 자동 수행하는 것을 기본 동작으로 두지는 않습니다. Git 작업은 `rules/git-safety.md`를 따릅니다.
+Memory, Skill, Tool, 공용 Rule, 전역 지침은 Git으로 동기화하고 변경 이력을 관리합니다. Git 작업은 `rules/git-safety.md`를 따릅니다.
 
 # 현재 단계
 
