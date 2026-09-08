@@ -29,7 +29,7 @@ agent_memory backfill
 
 - `recall`: normally automatic, but can be requested explicitly.
 - `remember` / `learn`: save or update a specific piece of current knowledge.
-- `backfill`: review the available current session/history, select durable knowledge, deduplicate it against existing memory, and persist only worthwhile items.
+- `backfill`: review the available current session/history, select durable knowledge, deduplicate it against existing memory, persist only worthwhile items, and accumulate worthwhile Tool candidates/improvements in the shared candidate backlog.
 
 Backfill is intentionally broader than Remember. For the detailed Backfill checklist, read `references/backfill.md` only when Backfill mode is invoked.
 
@@ -177,7 +177,7 @@ agent_memory backfill
 
 Equivalent requests such as `agent-memory backfill`, `이 세션 백필해`, or `이 세션 회고해서 필요한 기억 반영해` are also valid.
 
-The Backfill invocation itself is explicit permission to persist selected reusable knowledge from the available current session/history. It is not permission to modify unrelated project source or to implement Tool candidates.
+The Backfill invocation itself is explicit permission to persist selected reusable knowledge from the available current session/history and to update the shared Tool candidate backlog when worthwhile candidates are found. It is not permission to modify unrelated project source or to implement Tool candidates.
 
 ## Backfill procedure
 
@@ -191,17 +191,20 @@ The Backfill invocation itself is explicit permission to persist selected reusab
    - effective debugging, verification, build, deployment, DB, migration, or test sequences;
    - reusable procedures and safety checklists;
    - durable unresolved risks or technical debt that future work must know;
-   - repeated deterministic work that may be a Tool candidate.
+   - repeated deterministic work that may be a new Tool candidate;
+   - bugs, limitations, path/output issues, or usability problems in an existing Tool/Script that should be classified as an improvement instead of a new Tool.
 4. Prefer final verified outcomes over intermediate guesses. Preserve a wrong approach only when remembering why it was wrong would prevent recurrence.
-5. Validate important candidates against current source/configuration/tests when practical. Do not promote unverified claims into durable rules.
+5. Validate important Memory candidates against current source/configuration/tests when practical. Do not promote unverified claims into durable rules.
 6. Search existing memory before writing anything and merge near-duplicates instead of creating parallel memories.
-7. Classify and write only durable, reusable knowledge using the existing memory schema/template.
-8. Rebuild `INDEX.md` after successful memory changes.
-9. Report briefly:
+7. Classify and write only durable, reusable Memory knowledge using the existing memory schema/template.
+8. If Tool candidates or Tool/Script improvements were found, read `TOOL_CANDIDATES.md`, deduplicate by purpose/target/problem, and update the shared backlog according to `references/backfill.md` and `templates/TOOL_CANDIDATE_TEMPLATE.md`.
+9. Rebuild `INDEX.md` only after successful Memory changes. Tool candidate backlog changes do not require rebuilding the Memory index.
+10. Report briefly:
    - newly stored memories;
    - updated/deduplicated memories;
    - recurrence-prevention rules or important project constraints discovered;
-   - Tool candidates found, without implementing them;
+   - new Tool candidates and Tool/Script improvements;
+   - whether each Tool backlog item was newly added or merged into an existing item;
    - notable items intentionally skipped and why;
    - any session-history coverage limitation.
 
@@ -211,10 +214,15 @@ The Backfill invocation itself is explicit permission to persist selected reusab
 - Do not save raw conversation or raw logs.
 - Do not store every decision; retain only decisions likely to affect future work.
 - Do not store temporary progress/status that becomes stale immediately.
-- Do not save an unverified hypothesis as fact.
+- Do not save an unverified hypothesis as fact in Memory.
 - Do not overwrite verified final knowledge with an earlier incorrect conclusion from the same session.
-- Tool candidates are reported for later prioritization; Backfill does not create or modify Tools automatically.
-- If there is no worthwhile durable knowledge, report `저장할 가치 있는 신규 기억 없음` instead of inventing content.
+- Tool candidates are separate from Memory and may use `verification: needs-validation`, but do not invent candidates without evidence from the session/work.
+- Existing Tool/Script defects belong in `TOOL_CANDIDATES.md` as `kind: improvement`; do not misclassify them as new Tool candidates.
+- Backfill may update `TOOL_CANDIDATES.md`, but it does not create, modify, or execute the candidate Tool/Script implementation.
+- Never add candidate-only items to `TOOL_INDEX.md`.
+- If there is no worthwhile durable Memory knowledge, do not create Memory files.
+- If there are no Tool candidates/improvements, do not modify `TOOL_CANDIDATES.md`.
+- If neither exists, report that there is nothing worthwhile to persist rather than inventing content.
 
 # Classification
 
@@ -264,5 +272,10 @@ Typical locations:
 - `memory/incidents/`
 - `memory/projects/<project>/`
 - `memory/archive/`
+
+Tool candidate backlog:
+
+- `TOOL_CANDIDATES.md`
+- `templates/TOOL_CANDIDATE_TEMPLATE.md`
 
 Keep each memory compact enough to recognize the situation and safely reuse the lesson without replaying the original conversation.
