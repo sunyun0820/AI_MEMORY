@@ -1,6 +1,6 @@
 # AI_MEMORY Doctor
 # Windows PowerShell 5.1 compatible and ASCII-only by design.
-# Read-only diagnostics except for a temporary write test file that is deleted immediately.
+# Read-only diagnostics except for a temporary repository write test.
 
 $ErrorActionPreference = "Stop"
 
@@ -10,14 +10,15 @@ $RulesAggregatorPath = Join-Path $RulesRoot "RULES.md"
 $GlobalInstructionSource = Join-Path $RepoRoot "instructions\GLOBAL_AGENT_INSTRUCTIONS.md"
 $CursorPluginRoot = Join-Path $RepoRoot "adapters\cursor-plugin"
 $CursorPluginManifest = Join-Path $CursorPluginRoot ".cursor-plugin\plugin.json"
-$CursorPluginRulePath = Join-Path $CursorPluginRoot "rules\ai-memory.mdc"
-$RuleSourceNames = @(
-    "db-safety.md",
-    "git-safety.md",
-    "engineering-principles.md"
-)
+$CursorPluginRulesRoot = Join-Path $CursorPluginRoot "rules"
 $ManagedStart = "<!-- AI_MEMORY_MANAGED_START -->"
 $ManagedEnd = "<!-- AI_MEMORY_MANAGED_END -->"
+
+$RuleDefinitions = @(
+    [pscustomobject]@{ Source = "db-safety.md"; Adapter = "db-safety.mdc"; Description = "AI_MEMORY database access and credential safety rules." },
+    [pscustomobject]@{ Source = "git-safety.md"; Adapter = "git-safety.mdc"; Description = "AI_MEMORY Git safety rules." },
+    [pscustomobject]@{ Source = "engineering-principles.md"; Adapter = "engineering-principles.mdc"; Description = "AI_MEMORY shared engineering principles." }
+)
 
 $script:OkCount = 0
 $script:WarnCount = 0
@@ -44,6 +45,29 @@ function Normalize-Text {
     return (($Text -replace "`r`n", "`n" -replace "`r", "`n").Trim())
 }
 
+function Normalize-ComparablePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    return $Path.TrimEnd([char[]]"\/")
+}
+
+function Get-ResolvedPathOrNull {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    try { return (Resolve-Path $Path -ErrorAction Stop).Path }
+    catch { return $null }
+}
+
+function Test-SamePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$PathA,
+        [Parameter(Mandatory = $true)][string]$PathB
+    )
+
+    $a = Get-ResolvedPathOrNull -Path $PathA
+    $b = Get-ResolvedPathOrNull -Path $PathB
+    if ($null -eq $a -or $null -eq $b) { return $false }
+    return (Normalize-ComparablePath $a) -ieq (Normalize-ComparablePath $b)
+}
+
 function Test-CommandExists {
     param([Parameter(Mandatory = $true)][string]$Name)
     return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
@@ -62,38 +86,17 @@ function Test-AgentInstalled {
         [string[]]$Commands = @(),
         [string[]]$EvidencePaths = @()
     )
+
     foreach ($command in $Commands) {
         if (Test-CommandExists $command) { return $true }
     }
     return Test-AnyPath $EvidencePaths
 }
 
-function Normalize-ComparablePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    return $Path.TrimEnd([char[]]"\/")
-}
-
-function Get-ResolvedPathOrNull {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    try { return (Resolve-Path $Path -ErrorAction Stop).Path }
-    catch { return $null }
-}
-
-function Test-SamePath {
-    param(
-        [Parameter(Mandatory = $true)][string]$PathA,
-        [Parameter(Mandatory = $true)][string]$PathB
-    )
-    $a = Get-ResolvedPathOrNull $PathA
-    $b = Get-ResolvedPathOrNull $PathB
-    if ($null -eq $a -or $null -eq $b) { return $false }
-    return (Normalize-ComparablePath $a) -ieq (Normalize-ComparablePath $b)
-}
-
 function Get-SharedRulesBody {
     $parts = @()
-    foreach ($name in $RuleSourceNames) {
-        $path = Join-Path $RulesRoot $name
+    foreach ($rule in $RuleDefinitions) {
+        $path = Join-Path $RulesRoot $rule.Source
         if (-not (Test-Path $path -PathType Leaf)) { return $null }
         $content = [string](Get-Content $path -Raw -Encoding UTF8)
         if ([string]::IsNullOrWhiteSpace($content)) { return $null }
@@ -114,12 +117,15 @@ function Get-ExpectedRulesAggregator {
     return ($header.Trim() + "`r`n`r`n" + $body.Trim() + "`r`n")
 }
 
-function Get-CursorPluginRuleContent {
-    param([Parameter(Mandatory = $true)][string]$Content)
+function Get-CursorRuleContent {
+    param(
+        [Parameter(Mandatory = $true)][string]$Description,
+        [Parameter(Mandatory = $true)][string]$Content
+    )
 
     return (@"
 ---
-description: "AI_MEMORY shared memory, tools, and shared safety/engineering rules."
+description: "$Description"
 alwaysApply: true
 ---
 $ManagedStart
@@ -135,10 +141,7 @@ function Test-Link {
         [Parameter(Mandatory = $true)][string]$TargetPath
     )
 
-    if (-not (Test-Path $LinkPath)) {
-        Write-DoctorResult FAIL "$Label missing: $LinkPath"
-        return
-    }
+    if (-not (Test-Path $LinkPath)) { Write-DoctorResult FAIL "$Label missing: $LinkPath"; return }
 
     $item = Get-Item $LinkPath -Force
     if ($item.LinkType -ne "Junction" -and $item.LinkType -ne "SymbolicLink") {
@@ -147,10 +150,7 @@ function Test-Link {
     }
 
     foreach ($target in @($item.Target)) {
-        if (Test-SamePath -PathA $target -PathB $TargetPath) {
-            Write-DoctorResult OK "$Label"
-            return
-        }
+        if (Test-SamePath -PathA $target -PathB $TargetPath) { Write-DoctorResult OK $Label; return }
     }
 
     Write-DoctorResult FAIL "$Label target mismatch: $LinkPath"
@@ -163,23 +163,13 @@ function Test-TextFileMatches {
         [Parameter(Mandatory = $true)][string]$ExpectedPath
     )
 
-    if (-not (Test-Path $ActualPath -PathType Leaf)) {
-        Write-DoctorResult FAIL "$Label missing: $ActualPath"
-        return
-    }
-    if (-not (Test-Path $ExpectedPath -PathType Leaf)) {
-        Write-DoctorResult FAIL "$Label source missing: $ExpectedPath"
-        return
-    }
+    if (-not (Test-Path $ActualPath -PathType Leaf)) { Write-DoctorResult FAIL "$Label missing: $ActualPath"; return }
+    if (-not (Test-Path $ExpectedPath -PathType Leaf)) { Write-DoctorResult FAIL "$Label source missing: $ExpectedPath"; return }
 
     $actual = [string](Get-Content $ActualPath -Raw -Encoding UTF8)
     $expected = [string](Get-Content $ExpectedPath -Raw -Encoding UTF8)
-    if ((Normalize-Text $actual) -eq (Normalize-Text $expected)) {
-        Write-DoctorResult OK "$Label"
-    }
-    else {
-        Write-DoctorResult FAIL "$Label differs from AI_MEMORY source; run setup.ps1"
-    }
+    if ((Normalize-Text $actual) -eq (Normalize-Text $expected)) { Write-DoctorResult OK $Label }
+    else { Write-DoctorResult FAIL "$Label differs from AI_MEMORY source; run setup.ps1" }
 }
 
 function Test-ManagedInstruction {
@@ -189,17 +179,9 @@ function Test-ManagedInstruction {
         [Parameter(Mandatory = $true)][string]$ExpectedContent
     )
 
-    if (-not (Test-Path $Path -PathType Leaf)) {
-        Write-DoctorResult FAIL "$AgentName global instruction missing: $Path"
-        return
-    }
+    if (-not (Test-Path $Path -PathType Leaf)) { Write-DoctorResult FAIL "$AgentName global instruction missing: $Path"; return }
 
     $content = [string](Get-Content $Path -Raw -Encoding UTF8)
-    if ([string]::IsNullOrWhiteSpace($content)) {
-        Write-DoctorResult FAIL "$AgentName global instruction is empty: $Path"
-        return
-    }
-
     $startIndex = $content.IndexOf($ManagedStart)
     $endIndex = $content.IndexOf($ManagedEnd)
     if ($startIndex -lt 0 -or $endIndex -le $startIndex) {
@@ -208,9 +190,7 @@ function Test-ManagedInstruction {
     }
 
     $managedStartIndex = $startIndex + $ManagedStart.Length
-    $managedLength = $endIndex - $managedStartIndex
-    $managedContent = $content.Substring($managedStartIndex, $managedLength)
-
+    $managedContent = $content.Substring($managedStartIndex, $endIndex - $managedStartIndex)
     if ((Normalize-Text $managedContent) -eq (Normalize-Text $ExpectedContent)) {
         Write-DoctorResult OK "$AgentName global instruction matches AI_MEMORY source"
     }
@@ -239,8 +219,10 @@ $requiredPaths = @(
     "rules\git-safety.md",
     "rules\engineering-principles.md",
     "adapters\cursor-plugin\.cursor-plugin\plugin.json",
-    "adapters\cursor-plugin\rules\ai-memory.mdc",
-    "skills",
+    "adapters\cursor-plugin\rules\db-safety.mdc",
+    "adapters\cursor-plugin\rules\git-safety.mdc",
+    "adapters\cursor-plugin\rules\engineering-principles.mdc",
+    "skills\agent-memory\SKILL.md",
     "memory",
     "tools",
     "templates\MEMORY_TEMPLATE.md",
@@ -252,44 +234,29 @@ $requiredPaths = @(
 )
 
 foreach ($relative in $requiredPaths) {
-    if (Test-Path (Join-Path $RepoRoot $relative)) {
-        Write-DoctorResult OK "Required item: $relative"
-    }
-    else {
-        Write-DoctorResult FAIL "Missing required item: $relative"
-    }
+    if (Test-Path (Join-Path $RepoRoot $relative)) { Write-DoctorResult OK "Required item: $relative" }
+    else { Write-DoctorResult FAIL "Missing required item: $relative" }
 }
 
-if (Test-Path (Join-Path $RepoRoot ".git") -PathType Container) {
-    Write-DoctorResult OK "Git repository"
+if (Test-Path (Join-Path $CursorPluginRulesRoot "ai-memory.mdc") -PathType Leaf) {
+    Write-DoctorResult FAIL "Legacy combined Cursor rule still exists in repository; pull the latest version"
 }
-else {
-    Write-DoctorResult WARN ".git directory not found; this may be a copied repository."
-}
+else { Write-DoctorResult OK "Legacy combined Cursor rule removed from repository" }
+
+if (Test-Path (Join-Path $RepoRoot ".git") -PathType Container) { Write-DoctorResult OK "Git repository" }
+else { Write-DoctorResult WARN ".git directory not found; this may be a copied repository." }
 
 if (Test-CommandExists "git") { Write-DoctorResult OK "git command available" }
 else { Write-DoctorResult WARN "git command not found; synchronization will be unavailable." }
 
 $userMemoryHome = [Environment]::GetEnvironmentVariable("AI_MEMORY_HOME", "User")
-if ([string]::IsNullOrWhiteSpace($userMemoryHome)) {
-    Write-DoctorResult FAIL "User AI_MEMORY_HOME is not registered"
-}
-elseif (Test-SamePath -PathA $userMemoryHome -PathB $RepoRoot) {
-    Write-DoctorResult OK "User AI_MEMORY_HOME=$userMemoryHome"
-}
-else {
-    Write-DoctorResult FAIL "User AI_MEMORY_HOME points elsewhere: $userMemoryHome"
-}
+if ([string]::IsNullOrWhiteSpace($userMemoryHome)) { Write-DoctorResult FAIL "User AI_MEMORY_HOME is not registered" }
+elseif (Test-SamePath -PathA $userMemoryHome -PathB $RepoRoot) { Write-DoctorResult OK "User AI_MEMORY_HOME=$userMemoryHome" }
+else { Write-DoctorResult FAIL "User AI_MEMORY_HOME points elsewhere: $userMemoryHome" }
 
-if ([string]::IsNullOrWhiteSpace($env:AI_MEMORY_HOME)) {
-    Write-DoctorResult WARN "Current shell has no AI_MEMORY_HOME; open a new shell or rerun setup.ps1."
-}
-elseif (Test-SamePath -PathA $env:AI_MEMORY_HOME -PathB $RepoRoot) {
-    Write-DoctorResult OK "Current shell AI_MEMORY_HOME is correct"
-}
-else {
-    Write-DoctorResult WARN "Current shell AI_MEMORY_HOME differs: $env:AI_MEMORY_HOME"
-}
+if ([string]::IsNullOrWhiteSpace($env:AI_MEMORY_HOME)) { Write-DoctorResult WARN "Current shell has no AI_MEMORY_HOME; rerun setup.ps1 or open a new shell." }
+elseif (Test-SamePath -PathA $env:AI_MEMORY_HOME -PathB $RepoRoot) { Write-DoctorResult OK "Current shell AI_MEMORY_HOME is correct" }
+else { Write-DoctorResult WARN "Current shell AI_MEMORY_HOME differs: $env:AI_MEMORY_HOME" }
 
 $tempPath = Join-Path $RepoRoot (".doctor-write-test-" + [guid]::NewGuid().ToString("N") + ".tmp")
 try {
@@ -313,56 +280,38 @@ elseif (-not (Test-Path $RulesAggregatorPath -PathType Leaf)) {
 }
 else {
     $actualRulesAggregator = [string](Get-Content $RulesAggregatorPath -Raw -Encoding UTF8)
-    if ((Normalize-Text $actualRulesAggregator) -eq (Normalize-Text $expectedRulesAggregator)) {
-        Write-DoctorResult OK "Shared rule aggregator matches canonical rule files"
-    }
-    else {
-        Write-DoctorResult FAIL "rules\RULES.md is stale; run setup.ps1"
-    }
+    if ((Normalize-Text $actualRulesAggregator) -eq (Normalize-Text $expectedRulesAggregator)) { Write-DoctorResult OK "Shared rule aggregator matches canonical rule files" }
+    else { Write-DoctorResult FAIL "rules\RULES.md is stale; run setup.ps1" }
 }
 
-foreach ($ruleName in $RuleSourceNames) {
-    $rulePath = Join-Path $RulesRoot $ruleName
-    if (Test-Path $rulePath -PathType Leaf) {
-        $ruleContent = [string](Get-Content $rulePath -Raw -Encoding UTF8)
-        if ([string]::IsNullOrWhiteSpace($ruleContent)) {
-            Write-DoctorResult FAIL "Shared rule is empty: rules\$ruleName"
-        }
-        else {
-            Write-DoctorResult OK "Shared rule source: rules\$ruleName"
-        }
-    }
+foreach ($rule in $RuleDefinitions) {
+    $sourcePath = Join-Path $RulesRoot $rule.Source
+    if (-not (Test-Path $sourcePath -PathType Leaf)) { Write-DoctorResult FAIL "Shared rule missing: rules\$($rule.Source)"; continue }
+
+    $sourceContent = [string](Get-Content $sourcePath -Raw -Encoding UTF8)
+    if ([string]::IsNullOrWhiteSpace($sourceContent)) { Write-DoctorResult FAIL "Shared rule is empty: rules\$($rule.Source)"; continue }
+
+    Write-DoctorResult OK "Shared rule source: rules\$($rule.Source)"
+
+    $adapterPath = Join-Path $CursorPluginRulesRoot $rule.Adapter
+    $expectedAdapter = Get-CursorRuleContent -Description $rule.Description -Content $sourceContent.Trim()
+    if (-not (Test-Path $adapterPath -PathType Leaf)) { Write-DoctorResult FAIL "Cursor rule adapter missing: $adapterPath"; continue }
+
+    $actualAdapter = [string](Get-Content $adapterPath -Raw -Encoding UTF8)
+    if ((Normalize-Text $actualAdapter) -eq (Normalize-Text $expectedAdapter)) { Write-DoctorResult OK "Cursor rule adapter matches source: $($rule.Adapter)" }
+    else { Write-DoctorResult FAIL "Cursor rule adapter is stale: $($rule.Adapter); run setup.ps1" }
 }
 
-Write-Host ""
-Write-Host "=== Generated Adapters ==="
+$expectedManagedInstruction = ""
 if (-not (Test-Path $GlobalInstructionSource -PathType Leaf)) {
     Write-DoctorResult FAIL "Global instruction source missing: $GlobalInstructionSource"
-    $expectedManagedInstruction = ""
 }
 elseif ($null -eq $expectedRulesAggregator) {
     Write-DoctorResult FAIL "Cannot build expected managed instruction because shared rules are invalid"
-    $expectedManagedInstruction = ""
 }
 else {
     $globalInstruction = [string](Get-Content $GlobalInstructionSource -Raw -Encoding UTF8)
     $expectedManagedInstruction = $globalInstruction.Trim() + "`r`n`r`n" + $expectedRulesAggregator.Trim()
-}
-
-if (-not [string]::IsNullOrWhiteSpace($expectedManagedInstruction)) {
-    $expectedCursorPluginRule = Get-CursorPluginRuleContent -Content $expectedManagedInstruction
-    if (-not (Test-Path $CursorPluginRulePath -PathType Leaf)) {
-        Write-DoctorResult FAIL "Cursor plugin rule adapter missing: $CursorPluginRulePath"
-    }
-    else {
-        $actualCursorPluginRule = [string](Get-Content $CursorPluginRulePath -Raw -Encoding UTF8)
-        if ((Normalize-Text $actualCursorPluginRule) -eq (Normalize-Text $expectedCursorPluginRule)) {
-            Write-DoctorResult OK "Cursor plugin rule adapter matches AI_MEMORY source"
-        }
-        else {
-            Write-DoctorResult FAIL "Cursor plugin rule adapter is stale; run setup.ps1"
-        }
-    }
 }
 
 Write-Host ""
@@ -373,12 +322,8 @@ $skillDirectories = @(
         Where-Object { Test-Path (Join-Path $_.FullName "SKILL.md") } |
         Sort-Object Name
 )
-
 if ($skillDirectories.Count -gt 0) { Write-DoctorResult OK "Global skills found: $($skillDirectories.Count)" }
 else { Write-DoctorResult FAIL "No global skill with SKILL.md found" }
-
-if (Test-Path (Join-Path $skillsRoot "agent-memory\SKILL.md") -PathType Leaf) { Write-DoctorResult OK "agent-memory skill" }
-else { Write-DoctorResult FAIL "agent-memory skill missing" }
 
 $toolDocs = @(Get-ChildItem -Path (Join-Path $RepoRoot "tools") -Filter "TOOL.md" -File -Recurse -ErrorAction SilentlyContinue)
 Write-DoctorResult OK "Registered tools: $($toolDocs.Count)"
@@ -436,16 +381,12 @@ if ($codexInstalled -or $cursorInstalled) {
 else { Write-DoctorResult SKIP "Codex + Cursor skill checks" }
 
 if ($claudeInstalled) {
-    foreach ($skill in $skillDirectories) {
-        Test-Link -Label "Claude Code skill $($skill.Name)" -LinkPath (Join-Path $claudeHome "skills\$($skill.Name)") -TargetPath $skill.FullName
-    }
+    foreach ($skill in $skillDirectories) { Test-Link -Label "Claude Code skill $($skill.Name)" -LinkPath (Join-Path $claudeHome "skills\$($skill.Name)") -TargetPath $skill.FullName }
 }
 else { Write-DoctorResult SKIP "Claude Code skill checks" }
 
 if ($antigravityInstalled) {
-    foreach ($skill in $skillDirectories) {
-        Test-Link -Label "Antigravity skill $($skill.Name)" -LinkPath (Join-Path $antigravityConfigHome "skills\$($skill.Name)") -TargetPath $skill.FullName
-    }
+    foreach ($skill in $skillDirectories) { Test-Link -Label "Antigravity skill $($skill.Name)" -LinkPath (Join-Path $antigravityConfigHome "skills\$($skill.Name)") -TargetPath $skill.FullName }
 }
 else { Write-DoctorResult SKIP "Antigravity skill checks" }
 
@@ -463,13 +404,21 @@ if (-not [string]::IsNullOrWhiteSpace($expectedManagedInstruction)) {
         else {
             $pluginItem = Get-Item $cursorPluginInstall -Force
             if ($pluginItem.LinkType -eq "Junction" -or $pluginItem.LinkType -eq "SymbolicLink") {
-                Write-DoctorResult FAIL "Cursor local plugin is a link. Current Cursor builds may ignore links outside plugins/local; rerun setup.ps1."
+                Write-DoctorResult FAIL "Cursor local plugin is a link; rerun setup.ps1"
             }
             else {
                 Write-DoctorResult OK "Cursor local plugin is installed as a real directory"
                 Test-TextFileMatches -Label "Cursor local plugin manifest matches source" -ActualPath (Join-Path $cursorPluginInstall ".cursor-plugin\plugin.json") -ExpectedPath $CursorPluginManifest
-                Test-TextFileMatches -Label "Cursor local plugin rule matches source" -ActualPath (Join-Path $cursorPluginInstall "rules\ai-memory.mdc") -ExpectedPath $CursorPluginRulePath
-                Write-Host "[INFO] Doctor verifies local files only. Cursor must also allow third-party/local plugin imports."
+
+                foreach ($rule in $RuleDefinitions) {
+                    Test-TextFileMatches -Label "Cursor installed rule matches source: $($rule.Adapter)" -ActualPath (Join-Path $cursorPluginInstall "rules\$($rule.Adapter)") -ExpectedPath (Join-Path $CursorPluginRulesRoot $rule.Adapter)
+                }
+
+                $legacyInstalled = Join-Path $cursorPluginInstall "rules\ai-memory.mdc"
+                if (Test-Path $legacyInstalled -PathType Leaf) { Write-DoctorResult FAIL "Legacy combined Cursor rule still installed; rerun setup.ps1" }
+                else { Write-DoctorResult OK "Legacy combined Cursor rule removed from installed plugin" }
+
+                Write-Host "[INFO] Expected Cursor UI: one 'Ai Memory' local plugin and three AI_MEMORY rules."
             }
         }
     }
