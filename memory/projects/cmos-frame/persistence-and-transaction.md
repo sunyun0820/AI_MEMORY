@@ -1,4 +1,4 @@
-﻿---
+---
 id: MEM-20260908-frame-tx
 type: project
 scope: project
@@ -14,34 +14,30 @@ occurrences: 1
 source_agent: antigravity
 ---
 
-# C-MOS Framework Persistence & Transaction Architecture
+# C-MOS 영속 계층과 트랜잭션 성공 판정의 경계
 
-## Context
-프레임워크의 데이터베이스 접근 계층(JPA/MyBatis 혼용)과 트랜잭션 수명주기 및 트랜잭션 분기(`Basic` vs `Separated`)의 실제 구현 계약을 정리한다.
+## Core Knowledge
 
-## Transaction Model (`BaseTransaction`)
-- **Connection & Session 매핑**: `BaseTransaction`은 `SqlSession`과 `java.sql.Connection`을 함께 보유하며 격리 수준(기본값 `TRANSACTION_READ_COMMITTED`)과 타임아웃을 관리한다.
-- **TransactionType 분기**:
-  - `Basic("T")`:
-    - 일반 요청 트랜잭션.
-    - `BaseDispatcher`의 요청 수명주기에 종속되며, 정상 완료 시 일괄 commit, 예외 발생 시 일괄 rollback, finally에서 close된다.
-  - `Separated("S")`:
-    - 메인 Transaction과 별도 Connection/Session을 사용하며 현재 소스에서 독립 작업에 사용된다.
-    - 현재 소스에서 확인된 실제 사용처:
-      1. 진입/통신 이력 로깅 (`EntryLoggingRepository`, `ConnectorLoggingRepository`)
-      2. 스키마 메타데이터 캐싱 (`ClassCache`)
-      3. 독립 DB 현재 시각 조회 (`TimeUtility.dbNow`)
-    - *주의*: 검증 범위를 넘어서는 추가적인 격리 수준이나 절대적 동작 보장을 임의로 단정하지 않는다.
-- **자원 해제 불변조건**: 트랜잭션이 close된 이후 commit 또는 rollback을 호출하면 `UnsupportedOperationException("Closed Transaction")`이 발생한다.
+BaseTransaction은 MyBatis SqlSession과 JDBC Connection을 함께 보유한다. Basic 요청 트랜잭션은 Context/Dispatcher 흐름에서 관리되고, SeparatedTransaction은 독립 세션·커넥션을 사용한다. 분리 트랜잭션 생성 자체가 자동 commit이나 업무 전체 원자성을 뜻하지 않는다.
 
-## Persistence Architecture
-- **JPA & MyBatis 혼용 구조**:
-  - `InterfaceJPA` (`JpaRepository`): Spring Data JPA가 아니며 자체 구현체다. 엔티티 어노테이션 기반으로 단건/목록 조회(`select`, `selectWithLock`), CUD(`insert`, `update`, `delete`), Batch 연산을 동적으로 수행한다.
-  - `InterfaceMybatis` (`MybatisRepository`): 복잡한 업무 쿼리를 위한 MyBatis XML 매퍼 연동을 제공한다.
-- **SQL 생성 및 Dialect**:
-  - `FRAME-IIA`의 `SqlMaker` 계열(`SelectSqlMaker`, `InsertSqlMaker`, `UpdateSqlMaker`, `DeleteSqlMaker`, `SelectWithLockSqlMaker`)을 통해 DBMS에 맞는 SQL을 생성한다.
-  - 지원 DBMS Dialect: `MSSqlDialect`, `OracleDialect`, `PostgreSqlDialect`
-- **Connection Pool**: HikariCP, Tomcat DBCP, Vibur DBCP, Oracle UCP를 환경설정에 따라 지원한다.
+## Applicability / Lifecycle
 
-## Reusable Rule
-DB 작업 시 단순 CRUD 및 이력 저장은 `CoreRepository`의 JPA 계열 메서드를 활용하고, 다중 테이블 조인이나 도메인 특화 쿼리는 MyBatis 매퍼를 활용한다. 메인 업무 트랜잭션과 분리되어 즉시 저장되어야 하는 작업(로깅 등)은 `SeparatedTransaction`을 통해 수행한다.
+- 정상 업무 흐름의 commit·예외 rollback·finally close 호출은 [Dispatcher 수명주기](runtime-lifecycle.md)를 따른다.
+- 독립 작업은 commit/rollback/close 책임을 호출부에서 확인한다. 원본에서 확인한 사용처는 통신·진입 이력, ClassCache, TimeUtility.dbNow이고 현재 API 권한 cache reload도 사용한다.
+- SeparatedTransaction 생성 시 ContextFactory로 transaction ID를 발급하므로 ContextFactory가 먼저 초기화돼야 한다.
+- BaseTransaction 필드의 초기 격리 수준은 READ_COMMITTED지만 생성·환경 설정으로 전달되는 실제 값을 확인한다. 모든 실행의 격리 수준이 고정됐다고 단정하지 않는다.
+- close 이후 commit/rollback은 `Closed Transaction` 예외를 낸다.
+
+## Failure Boundary
+
+현재 BaseTransaction의 commit·rollback은 SqlSession/JDBC 호출 예외를 내부에서 잡아 버리고 로그를 남긴다. 정상 반환이나 commit 로그만으로 DB 성공을 확정할 수 없다. close도 내부 자원 해제 예외를 삼킨다. 호출부의 try/catch만으로 모든 DB 실패를 감지한다고 문서화하지 않는다.
+
+이는 현재 소스의 제약이며 이번 Refine에서 수정하거나 실패 재현한 내용은 아니다. [폴백과 성공 판정 lesson](../../lessons/fallback-result-is-not-success-proof.md)을 함께 참고한다.
+
+## Persistence Boundaries
+
+JpaRepository/InterfaceJPA는 자체 엔티티 어노테이션·SQL 생성 구현이며 Spring Data JPA가 아니다. MybatisRepository/InterfaceMybatis는 XML 매퍼를 연결한다. SQL Maker/Dialect와 설정된 풀 구현이 실제 DB 동작을 결정한다. MSSQL·Oracle·PostgreSQL용 dialect 존재만으로 모든 쿼리의 이식성을 보장하지 않는다.
+
+## Verification
+
+2026-09-08 `framework/iia/.../BaseTransaction.java`, `materialze/context/SeparatedTransaction.java`, `BaseDispatcher.java`, `core/.../AuthorizationCacheManager.java`를 정적 대조했다. DB 접속·commit 실패 주입·런타임 검증은 수행하지 않았다.

@@ -141,6 +141,7 @@ function Set-TextFileIfChanged {
 function Ensure-Junction {
     param(
         [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$SkillName,
         [Parameter(Mandatory = $true)][string]$JunctionPath,
         [Parameter(Mandatory = $true)][string]$TargetPath
     )
@@ -160,8 +161,27 @@ function Ensure-Junction {
             Write-Warning "$Label has a different link at: $JunctionPath"
             return
         }
-        Write-Warning "$Label has a real file/directory at: $JunctionPath"
-        return
+
+        if (-not (Test-Path $JunctionPath -PathType Container)) {
+            Write-Warning "$Label has a real file at the skill path and was not changed: $JunctionPath"
+            return
+        }
+
+        $destinationSkill = Join-Path $JunctionPath "SKILL.md"
+        if (-not (Test-Path $destinationSkill -PathType Leaf)) {
+            Write-Warning "$Label destination is not an AI skill directory and was not changed: $JunctionPath"
+            return
+        }
+
+        $destinationText = [string](Get-Content $destinationSkill -Raw -Encoding UTF8)
+        $escapedSkillName = [regex]::Escape($SkillName)
+        if ($destinationText -notmatch ("(?m)^name:\s*" + $escapedSkillName + "\s*$")) {
+            Write-Warning "$Label destination appears to belong to another skill and was not changed: $JunctionPath"
+            return
+        }
+
+        Remove-Item $JunctionPath -Recurse -Force
+        Write-Host "[MIGRATE] $Label replaced matching real skill directory with AI_MEMORY junction"
     }
 
     New-Item -ItemType Junction -Path $JunctionPath -Target $TargetPath | Out-Null
@@ -477,7 +497,7 @@ if ($skillDirectories.Count -gt 0 -and $junctionSkillRoots.Count -gt 0) {
     Write-Host "=== Skill Junctions ==="
     foreach ($skill in $skillDirectories) {
         foreach ($agent in $junctionSkillRoots.GetEnumerator()) {
-            Ensure-Junction -Label "$($agent.Key) skill $($skill.Name)" -JunctionPath (Join-Path $agent.Value $skill.Name) -TargetPath $skill.FullName
+            Ensure-Junction -Label "$($agent.Key) skill $($skill.Name)" -SkillName $skill.Name -JunctionPath (Join-Path $agent.Value $skill.Name) -TargetPath $skill.FullName
         }
     }
 }

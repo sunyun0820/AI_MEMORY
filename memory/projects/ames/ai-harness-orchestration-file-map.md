@@ -41,3 +41,7 @@ source_agent: codex
 ## Verification
 
 관련 저장소의 `AGENTS.md`, `CLAUDE.md`, `README.md`, 역할·명령·스킬 파일, `ADR-008`, `STATUS.md`, TASK/ISSUES 기록을 읽어 파일 간 역할과 상태 처리 규칙을 대조했다. 이번 세션에는 마이그레이션, 빌드, 테스트, DB 접속, Git 변경, 훅 실행을 수행하지 않았다. 관련 문서와 실제 실행 결과가 충돌하면 현재 코드·설정·로그를 우선한다.
+
+## Refine Verification Boundary
+
+2026-09-08 전체 정제에서 위 원본 저장소 경로는 현재 머신에서 확인되지 않았다. 파일 구조와 hooks 상태는 원본 조사 당시의 관찰이며 현재 설치·실행 상태로 단정하지 않는다. AMES 작업을 재개하면 실제 checkout의 역할·명령·상태 문서와 hooks 경로를 다시 대조한다. 초보자용 교재 제작 사실은 구조의 실행 증거가 아니다.
