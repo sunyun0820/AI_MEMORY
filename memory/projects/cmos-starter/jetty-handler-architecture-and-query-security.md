@@ -10,7 +10,7 @@ confidence: high
 created: 2026-09-09
 updated: 2026-09-09
 last_seen: 2026-09-09
-occurrences: 1
+occurrences: 2
 source_agent: antigravity
 ---
 
@@ -33,13 +33,13 @@ source_agent: antigravity
 
 ### 2. 정적 리소스 서빙과 webFilters의 실행 경계
 `ApiHandler.java`는 요청 처리 시작 시 `context.getResource(url)`을 검사한다:
-`java
+```java
 Resource resource = context.getResource(url);
 if (resource != null && resource.exists()) {
     isResource = true;
     return;
 }
-`
+```
 - **중요 경계**: `/login.html`, `/mobile/login.html` 등 `resourceBase`(`wwwroot`)에 존재하는 정적 파일 요청은 `ApiHandler`에서 즉시 탈출(return)하여 5번 `WebAppContext`의 Jetty `DefaultServlet`으로 직행한다.
 - **불변조건**: `web.json`에 등록된 `webFilters`(`CorsWebApiFilter`, `RequestSchemaWebFilter`, `SecurityWebFilter` 등)는 **정적 웹콘텐츠 요청 시 절대 실행되지 않으며, 오직 API 요청에만 적용된다**.
 - 따라서 정적 HTML 요청을 포함한 전체 서버 차원의 HTTP 보안 제어는 반드시 `addHandlerByApi` 이전의 Jetty Handler 레벨에서 처리해야 한다.
@@ -48,7 +48,10 @@ if (resource != null && resource.exists()) {
 - **제약**: 비밀번호, 인증 토큰 등 민감 정보는 URL 쿼리스트링에 위치해서는 안 되며, 반드시 암호화된 요청 본문(Body)으로 전송되어야 한다.
 - **정상 웹데이터와의 격리**: 정상 로그인(`POST /login`) 및 비즈니스 API 호출은 본문 JSON의 `WEBDATA` 배열을 사용하며, 요청 URL 뒤에 `?` 쿼리스트링이 없으므로 `request.getQueryString()`은 `null`이다.
 - **차단 메커니즘**: `addHandlerBySensitiveQueryBlock`은 `request.getQueryString()`만 검사하므로 본문 스트림이나 정상 API 동작에 0%의 부작용을 보장하면서, 주소창에 파라미터를 노출하는 `password1`, `password`, `pwd`, `passwd` 등의 쿼리 파라미터를 HTTP 400으로 즉시 차단한다.
-- **로그 유출 방지**: 보안 위반 차단 로그 기록 시 URI, 파라미터명, IP만 로깅하고 비밀번호 원문 값은 절대 로그에 남기지 않는다.
+- **로그 유출 방지 불변조건**:
+  - `findSensitiveQueryParam`은 `=` 앞의 키 이름(`rawName`)만 추출하여 반환한다.
+  - 차단 로깅 시 `logger.warn("... URI: {}, Param: {}, IP: {}", target, matchedParam, ip)` 형식으로 파라미터명만 기록되고, 사용자가 입력한 패스워드 값은 절대 저장되거나 로깅되지 않는다.
+  - `baseRequest.setHandled(true)` 호출로 후속 핸들러/디스패처 전파를 즉시 차단하므로 일반 `[ACCESS]` 로그에도 쿼리 파라미터 값이 남지 않는다.
 
 ### 4. 브랜치 및 의존성 불변조건
 - `web-ui`의 `pom.xml`은 `plugin-web-starter:3.5.3-SNAPSHOT` 및 `plugin-jetty:3.5.3-SNAPSHOT`을 참조한다.
@@ -57,4 +60,7 @@ if (resource != null && resource.exists()) {
 ## Verification
 
 - `plugin-jetty`에 `addHandlerBySensitiveQueryBlock`, `findSensitiveQueryParam`, `isSensitiveParamName` 구현 후 `mvn clean compile` 및 `mvn install` 성공 (`3.5.3-SNAPSHOT`).
-- `password1=...`, `pwd=...`, URL-인코딩된 `%70%61%73%73%77%6f%72%64%31=...` 쿼리 매개변수 차단 및 정상 쿼리 통과 검증 완료.
+- **라이브 서버 실증 (2026-09-09, `localhost:22112`)**:
+  - `POST /login?password=TEST_ONLY` 및 `GET /login?password=TEST_ONLY` → `HTTP 400 Bad Request` 차단 확인.
+  - `GET /login.html?password1=TEST_ONLY` 및 `GET /mobile/login.html?password1=TEST_ONLY` → `HTTP 400 Bad Request` 차단 확인.
+  - `curl "http://localhost:22112/login?password=MySecretPassword999!"` 주입 테스트 후 전체 서버 로그 전수 검사 결과: `Param: password`만 기록되고 패스워드 값(`MySecretPassword999!`)은 0건 검출(미기록) 확인.
