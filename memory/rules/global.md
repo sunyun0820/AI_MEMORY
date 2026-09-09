@@ -6,7 +6,7 @@ status: active
 confidence: high
 tags: [memory, safety, workflow]
 created: 2026-09-07
-updated: 2026-09-08
+updated: 2026-09-09
 ---
 
 # Shared Agent Memory 기본 규칙
@@ -18,3 +18,4 @@ updated: 2026-09-08
 5. 신규 메모리를 만들기 전에 중복 검색을 수행한다.
 6. 기존 메모리가 틀렸다고 확인되면 새 파일을 추가하기보다 기존 메모리를 수정하거나 archive 처리한다.
 7. 메모리 적용으로 변경 범위를 불필요하게 확대하지 않는다.
+8. Recall은 현재 문제와 관련된 여러 Memory를 각 적용 범위와 근거를 지키며 조합해 임시 Working Knowledge를 만들 수 있다. 조합 결과를 원래 Memory보다 강한 사실로 단정하지 않으며, 반복성이나 독립적인 재사용 가치가 확인되지 않으면 그 조합 자체를 장기 Memory로 자동 저장하지 않는다.
