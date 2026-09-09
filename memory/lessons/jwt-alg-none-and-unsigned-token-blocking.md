@@ -8,7 +8,7 @@ tags: [jwt, alg-none, signature-validation, security-web-filter, authentication-
 status: active
 confidence: high
 created: 2026-09-09
-updated: 2026-09-09
+updated: 2026-09-10
 last_seen: 2026-09-09
 occurrences: 1
 source_agent: antigravity
@@ -18,11 +18,11 @@ source_agent: antigravity
 
 ## Core Knowledge
 
-SecurityWebFilter의 validUrl 비대상 경로는 rejectUnsignedToken으로 제한적인 형식 검사를 한다. 이는 이전 토큰을 붙여 /login·/loginwidget을 호출하는 해당 클라이언트의 재로그인 호환 분기이며 일반 JWT 인증 정책이 아니다. 이 분기를 통과했다는 사실은 토큰 서명이나 사용자 인증 성공을 뜻하지 않는다.
+2026-09-09 조사한 SecurityWebFilter의 validUrl 비대상 경로는 rejectUnsignedToken으로 제한적인 형식 검사를 한다. 이는 이전 토큰을 붙여 /login·/loginwidget을 호출하는 해당 클라이언트의 재로그인 호환 분기이며 일반 JWT 인증 정책이 아니다. 이 분기를 통과했다는 사실은 토큰 서명이나 사용자 인증 성공을 뜻하지 않는다.
 
 ## Source Contract
 
-현재 doStart는 ignore method 처리 → validUrl 분기 → 보호 URL의 WebUtil.getAuthentication 및 Site/IP·command/SQL 권한 검사 순서다.
+조사본의 doStart는 ignore method 처리 → validUrl 분기 → 보호 URL의 WebUtil.getAuthentication 및 Site/IP·command/SQL 권한 검사 순서다.
 
 validUrl=false 분기의 rejectUnsignedToken은:
 
@@ -33,10 +33,10 @@ validUrl=false 분기의 rejectUnsignedToken은:
 
 ## Applicability / Recurrence Prevention
 
-현재 클라이언트와 인증 필터의 공개 로그인 계약을 유지·변경할 때만 참고한다. 보호 URL까지 이 제한 검사를 대신 적용하거나 미검증 claim을 사용자 신원·권한으로 신뢰하지 않는다. 공개 경로에서 토큰을 완전히 검사할지 무시할지는 그 경로의 실제 인증 계약에 따라 별도로 결정한다.
+위 날짜에 기록된 클라이언트·인증 필터의 공개 로그인 계약을 유지·변경할 때 참고한다. 보호 URL까지 이 제한 검사를 대신 적용하거나 미검증 claim을 사용자 신원·권한으로 신뢰하지 않는다. 공개 경로에서 토큰을 완전히 검사할지 무시할지는 그 경로의 실제 인증 계약에 따라 별도로 결정한다.
 
 “만료 토큰은 항상 허용해야 한다”, “공개 URL은 무조건 이 검사로 충분하다”로 일반화하지 않는다. 다른 URL 설정, ignore method, 토큰 없이 오는 요청과 실제 로그인 자격 증명 검증까지 구분한다.
 
 ## Verification
 
-2026-09-09 현재 cmos frame/core/.../web/filter/SecurityWebFilter.java의 doStart, rejectUnsignedToken, isNoneOrMissingAlg를 정적 확인했다. 원본 로컬 시험은 none 토큰의 401과 서명부가 있는 입력의 로그인 로직 진입 후 ISSUCCESS=false 응답을 기록한다. 후자는 로그인 성공이나 암호학적 서명 검증 증거가 아니다. 이번 Refine에서 HTTP·계정·토큰 시험은 수행하지 않았다.
+2026-09-09 cmos frame/core/.../web/filter/SecurityWebFilter.java의 doStart, rejectUnsignedToken, isNoneOrMissingAlg를 정적으로 확인한 기록이다. 원본 로컬 시험은 none 토큰의 401과 서명부가 있는 입력의 로그인 로직 진입 후 ISSUCCESS=false 응답을 기록한다. 후자는 로그인 성공이나 암호학적 서명 검증 증거가 아니다. 정적 확인과 당시 로컬 시험 결과를 모든 경로의 인증 검증으로 확대하지 않는다.

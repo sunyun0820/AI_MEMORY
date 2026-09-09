@@ -8,38 +8,29 @@ tags: [lotdefect, service, MaterialLot, validation]
 status: active
 confidence: medium
 created: 2026-09-08
-updated: 2026-09-08
+updated: 2026-09-10
 last_seen: 2026-09-08
 occurrences: 1
 source_agent: cursor-agent
 ---
 
-# eti LOTDEFECT 재저장 경로의 과거 소스 관찰과 재확인 지점
+# eti LOTDEFECT의 API·Service·MaterialLot 수량 경계
 
-## Context
+## Core Knowledge
 
-`Lot.Qty` 이중 차감의 직접 원인은 `LOTDEFECT.DefectLot`였다. Service는 Lot.Qty를 다시 빼지 않는다. 다만 같은 재저장 경로에 차분과 다른 검증/차감이 남아 있다. 런타임 재현은 하지 않았고, 2026-08-21 Service 소스 읽기로만 확인했다.
+2026-08-21 ETI 소스 관찰에서 `Lot.Qty` 이중 차감의 직접 원인은 `LOTDEFECT.DefectLot`였으며 Service는 Lot.Qty를 다시 빼지 않았다. 같은 재저장 흐름의 Service 수량 검증과 CONVERTED MaterialLot 차감은 별도 경계이므로 API의 차분 수정만으로 모두 해결됐다고 판단하지 않는다.
 
-## Symptom
+## Recorded Behavior / Applicability
 
-API Qty 버그와 별개로, 기존 불량 수량을 키우는 재저장이 Service에서 막히거나 CONVERTED Lot의 MaterialLot 수량이 요청 전체만큼 다시 빠질 수 있다.
+- `PRODUCTIONLotManager.MakeLotList_Defect`는 `item.Qty < 요청 불량 합`으로 검사하며 변경 차분을 사용하지 않았다.
+- `SaveLotDefect`의 CONVERTED 분기는 `materiallot.Qty -= 요청수량 전체`를 적용했다.
+- 따라서 기존 불량 수량 증가가 Service에서 거부되거나 MaterialLot가 재차 차감될 가능성이 있다. 이는 위 정적 관찰에서 도출한 영향이며 런타임 재현된 장애로 기록하지 않는다.
+- `CancelDefectLot`는 삭제 시 기존 수량을 되돌리는 경로로, 해당 Lot.Qty 재저장 사고의 원인은 아니었다.
 
-## Historical Source Observation
+## Avoid / Recurrence Prevention
 
-`PRODUCTIONLotManager.MakeLotList_Defect`는 `item.Qty < 요청 불량 합`으로만 검증한다. 차분을 보지 않는다. `SaveLotDefect`의 CONVERTED 분기는 `materiallot.Qty -= 요청수량 전체`를 적용한다.
+ETI 불량 재저장을 수정할 때 API Qty, Service의 허용 수량 검사, CONVERTED MaterialLot를 각각 대조한다. API 차분 수정의 과거 근거는 [이중 차감 사고](../../incidents/eti-lotdefect-qty-double-deduct.md), 차분의 일반 적용 조건은 [수량 갱신 교훈](../../lessons/paired-qty-update-must-use-delta.md)을 참조한다.
 
-## Correct Approach
+## Evidence
 
-수량 변경 재저장을 손볼 때는 API `DefectLot`뿐 아니라 Service 검증과 CONVERTED MaterialLot 차감이 차분 기준인지 같이 본다. `CancelDefectLot`는 삭제 시 기존 수량을 되돌리므로 이 Qty 재저장 버그의 원인이 아니다.
-
-## Reusable Rule
-
-eti 불량 재저장은 API Qty, Service 검증, CONVERTED MaterialLot를 따로 대조한다.
-
-## Verification
-
-`mes_service` `PRODUCTIONLotManager.DefectLot.cs`와 `ManagerExtenstions.Production.Lotdefect.cs` 소스 확인. 재현 테스트 없음.
-
-## Current Verification Boundary
-
-2026-09-08 전체 정제에서 현재 접근 가능한 프로젝트 경로에는 원본 ETI checkout을 찾지 못해 재검증하지 않았다. 위 관찰은 2026-08-21 소스 기준이며 현재도 미해결이라고 단정하지 않는다. 해당 기능을 수정할 때 실제 checkout의 API·Service 검증·CONVERTED MaterialLot 경로를 다시 대조한다. 기존 medium confidence를 유지하며 런타임 장애로 승격하지 않는다.
+2026-08-21 `mes_service`의 `PRODUCTIONLotManager.DefectLot.cs`, `ManagerExtenstions.Production.Lotdefect.cs`를 읽은 기록이다. Service·MaterialLot 영향의 재현 테스트는 기록되지 않았다. 이 시점의 관찰을 이후 버전에서도 미해결인 장애로 단정하지 않는다.
