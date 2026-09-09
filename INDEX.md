@@ -8,21 +8,33 @@
 
 ## Projects
 
+- [MEM-20260909-2nd-battery-configuration-and-runtime] 2nd-battery · Configuration & Runtime - memory/projects/2nd-battery/configuration-and-runtime.md | project: 2nd-battery
+- [MEM-20260909-2nd-battery-extension-patterns-and-invariants] 2nd-battery · Extension Patterns & Invariants - memory/projects/2nd-battery/extension-patterns-and-invariants.md | project: 2nd-battery
+- [MEM-20260909-2nd-battery-integration-and-web-boundaries] 2nd-battery · Integration & Web Boundaries - memory/projects/2nd-battery/integration-and-web-boundaries.md | project: 2nd-battery
+- [MEM-20260909-2nd-battery-persistence-and-query-patterns] 2nd-battery · Persistence & Query Patterns - memory/projects/2nd-battery/persistence-and-query-patterns.md | project: 2nd-battery
+- [MEM-20260909-2nd-battery-project-architecture] 2nd-battery · Project Architecture - memory/projects/2nd-battery/project-architecture.md | project: 2nd-battery
+- [MEM-20260909-2nd-battery-runtime-and-business-flow] 2nd-battery · Runtime & Business Flow - memory/projects/2nd-battery/runtime-and-business-flow.md | project: 2nd-battery
+- [MEM-20260909-2nd-battery-source-navigation-map] 2nd-battery · Source Navigation Map - memory/projects/2nd-battery/source-navigation-map.md | project: 2nd-battery
 - [MEM-20260908-ames-ai-harness] AMES THiRA MES 마이그레이션 AI 하네스의 역할과 파일 경계 - memory/projects/ames/ai-harness-orchestration-file-map.md | project: AMES
+- [MEM-20260908-cmos-callback-contract] C-MOS 외부 JSON 콜백의 입력·응답 경계 - memory/projects/cmos-frame/web-callback-input-response-contract.md | project: cmos-frame
 - [MEM-20260908-155842] C-MOS Framework 3.5.2 백엔드 매뉴얼의 현재 소스 계약 - memory/projects/cmos-frame/backend-manual-source-contracts-3.5.2.md | project: cmos-frame
 - [MEM-20260908-frame-architecture] C-MOS Framework Architecture & Module Boundaries - memory/projects/cmos-frame/architecture.md | project: cmos-frame
 - [MEM-20260908-frame-contracts] C-MOS Framework Extension Contracts & Invariants - memory/projects/cmos-frame/extension-contracts-and-invariants.md | project: cmos-frame
 - [MEM-20260908-frame-tx] C-MOS Framework Persistence & Transaction Architecture - memory/projects/cmos-frame/persistence-and-transaction.md | project: cmos-frame
 - [MEM-20260908-frame-lifecycle] C-MOS Framework Runtime Lifecycle & Request Flow - memory/projects/cmos-frame/runtime-lifecycle.md | project: cmos-frame
 - [MEM-20260908-frame-nav] C-MOS Framework Source Navigation Map - memory/projects/cmos-frame/source-navigation-map.md | project: cmos-frame
+- [MEM-20260909-frame-threadpool] C-MOS Framework Thread Pool Architecture & Concurrency Control - memory/projects/cmos-frame/threadpool-and-concurrency-architecture.md | project: cmos-frame
 - [MEM-20260908-154901] cmos-frame DB 컬럼 암호화 복호화 실패 폴백 및 이중 암호화 방지 패턴 - memory/projects/cmos-frame/crypto-column-fallback-and-double-encryption-prevention.md | project: cmos-frame
+- [MEM-20260909-151501] C-MOS Starter plugin-jetty 핸들러 체인 구조와 쿼리스트링 보안 제약 - memory/projects/cmos-starter/jetty-handler-architecture-and-query-security.md | project: cmos-starter
 - [MEM-20260908-152802] eti LOTDEFECT 수량 관련 잔여 경계 - memory/projects/eti/lotdefect-qty-related-risks.md | project: eti
+- [MEM-20260908-hyosung-agv-boundaries] Hyosung AGV 연동 작업 경계와 검증 범위 - memory/projects/hyosung/agv-integration-boundaries.md | project: hyosung
 
 ## Lessons
 
-- [MEM-20260908-154902] Windows 환경 Maven 컴파일 시 JAVA_HOME Java 8 지정으로 인한 Java 17 타깃 빌드 실패 - memory/lessons/windows-mvn-compiler-target17-jdk-mismatch.md
 - [MEM-20260908-152801] 기존 행 재저장 시 쌍 수량 필드는 차분으로 맞출 것 - memory/lessons/paired-qty-update-must-use-delta.md
 - [MEM-20260908-155843] 소스 기반 DOCX 매뉴얼은 API 정합성과 OOXML 레이아웃을 함께 검증할 것 - memory/lessons/source-grounded-docx-manual-validation.md
+- [MEM-20260909-151502] AppScan 조회의 비밀번호 매개변수 취약점 원인과 프론트·서버 2-Track 방어 패턴 - memory/lessons/appscan-password-in-query-prevention.md
+- [MEM-20260908-154902] Windows 환경 Maven 컴파일 시 JAVA_HOME Java 8 지정으로 인한 Java 17 타깃 빌드 실패 - memory/lessons/windows-mvn-compiler-target17-jdk-mismatch.md
 - [MEM-20260908-155201] 관계/권한(Relation) 데이터 동기화 시 전체 삭제/재등록 대신 Set 기반 diff로 변경분만 처리 - memory/lessons/relation-data-sync-must-use-diff-bulk.md | project: mes-core
 
 ## Incidents

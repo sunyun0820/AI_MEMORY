@@ -100,6 +100,26 @@
 - `evidence`: C-MOS 백엔드 개발자 매뉴얼 작업에서 LibreOffice 탐색 실패 후 숨김 Word COM으로 PDF를 만들고 Poppler의 `pdftoppm.exe`로 26페이지를 렌더링해 전 페이지 QA를 완료했다.
 - `proposed_direction`: Windows에서 LibreOffice를 찾지 못할 때 Word COM의 PDF 내보내기를 선택적 fallback으로 제공하고, wrapper 탐색이 실패하면 번들 Poppler 실행 파일을 직접 탐색한다. Word 프로세스 종료와 임시 파일 정리를 보장한다.
 
+### TC-0005 — AppScan 보안 보고서 PDF 진단 항목 및 테스트 페이로드 추출기
+
+- `dedup_key`: `extract-appscan-report-findings`
+- `kind`: `new-tool`
+- `target`: `scripts/extract-appscan-report.py`
+- `status`: `candidate`
+- `occurrences`: 1
+- `first_seen`: `2026-09-09`
+- `last_seen`: `2026-09-09`
+- `projects`: `busan-security`, `cmos`
+- `verification`: `source-confirmed`
+- `expected_gain`: `token=high, time=high, error=medium`
+- `implementation_difficulty`: `low`
+- `recommendation`: `high`
+- `problem`: 200페이지가 넘는 대용량 AppScan 보안 진단 보고서 PDF에서 특정 취약점 번호, URL, 파라미터, 테스트 HTTP 요청/응답 전문, 수정 권고사항을 매번 개별 스크립트로 추출해야 하며, Windows 콘솔의 CP949 인코딩 충돌과 반복적인 페이지 탐색으로 토큰과 시간이 낭비됨.
+- `input`: PDF 파일 경로, 검색할 취약점 번호 또는 키워드(예: "조회의 비밀번호", URL 경로)
+- `output`: 문제 번호, 심각도, CVSS 점수, 대상 URL, 엔티티, 테스트 HTTP 요청/응답 전문, 수정 권고사항을 추출한 정형 Markdown/JSON.
+- `evidence`: 217페이지에 달하는 `BSMES 보안 보고서_...신버전.pdf`에서 페이지 84~91, 204~206을 발굴하기 위해 파이썬 일회성 코드를 반복 작성하고 CP949 인코딩 예외를 처리해야 했음. 자동화 시 보안 취약점 분석 및 조치 검증 속도를 크게 단축할 수 있음.
+- `proposed_direction`: PyMuPDF(`fitz`) 기반으로 PDF 내 목차, 문제 헤더, 테스트 요청/응답, 수정 권고사항 패턴을 정규식 파싱하여 취약점별 인덱스를 구축하고, CLI 옵션으로 특정 문제 번호나 키워드로 즉시 조회할 수 있는 파이썬 스크립트 작성.
+
 ## 신규 항목 템플릿
 
 새 항목은 `templates/TOOL_CANDIDATE_TEMPLATE.md` 형식을 사용합니다.

@@ -8,9 +8,9 @@ tags: [maven, java, build, windows, jdk17, jdk21, environment]
 status: active
 confidence: high
 created: 2026-09-08
-updated: 2026-09-08
-last_seen: 2026-09-08
-occurrences: 1
+updated: 2026-09-09
+last_seen: 2026-09-09
+occurrences: 2
 source_agent: antigravity
 ---
 
@@ -18,7 +18,7 @@ source_agent: antigravity
 
 ## Context
 
-Windows 개발 환경에서 `cmos-frame` 및 `busan_\service` 프로젝트를 Maven(`mvn compile`)으로 빌드할 때 발생한 컴파일러 타깃 버전 불일치 문제이다.
+Windows 개발 환경에서 `cmos-frame`, `busan_\service`, `cmos-starter`(`plugin-jetty`, `plugin-web-starter`) 프로젝트를 Maven(`mvn compile`)으로 빌드할 때 발생한 컴파일러 타깃 버전 불일치 문제이다.
 
 ## Symptom
 
@@ -42,4 +42,4 @@ Windows 환경에서 Maven 빌드 시 `invalid target release: 17` 에러가 발
 
 ## Verification
 
-`$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-21.0.4.7-hotspot"` 설정 후 `cmos-frame` 및 `busan_\service`에서 `mvn compile` 성공 (`BUILD SUCCESS`).
+`$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-21.0.4.7-hotspot"` 설정 후 `cmos-frame`, `busan_\service`, `cmos-starter`에서 `mvn compile` 성공 (`BUILD SUCCESS`).

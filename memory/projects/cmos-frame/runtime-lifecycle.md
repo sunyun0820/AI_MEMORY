@@ -1,4 +1,4 @@
-﻿---
+---
 id: MEM-20260908-frame-lifecycle
 type: project
 scope: project
@@ -8,9 +8,9 @@ tags: [framework, cmos, lifecycle, factory-init, dispatcher, request-flow]
 status: active
 confidence: high
 created: 2026-09-08
-updated: 2026-09-08
-last_seen: 2026-09-08
-occurrences: 1
+updated: 2026-09-09
+last_seen: 2026-09-09
+occurrences: 2
 source_agent: antigravity
 ---
 
@@ -61,3 +61,7 @@ source_agent: antigravity
 
 ## Reusable Rule
 API 요청 처리 중 발생하는 비즈니스 로직은 `validation()`과 `execute()` 단계에 배치되며, 트랜잭션의 커밋과 롤백, 컨텍스트 해제는 `BaseDispatcher`가 프레임워크 레벨에서 일괄 제어한다.
+
+## Related References
+- 스레드풀 및 동시성 제어 구조: [MEM-20260909-frame-threadpool](file:///E:/AI/AI_MEMORY/memory/projects/cmos-frame/threadpool-and-concurrency-architecture.md)
+
