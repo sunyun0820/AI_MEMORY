@@ -7,18 +7,18 @@ description: Shared engineering memory for coding agents. Automatically use Reca
 
 Use the shared `AI_MEMORY` repository as selective long-term engineering memory.
 
-This skill has four distinct modes:
+The goal is not to preserve implementation history or mirror current source. The goal is to preserve **reference knowledge** that improves future decisions: reusable lessons, recurrence prevention, important rules, past failures, and project/version-specific structure or constraints.
 
-- **Recall**: automatic when relevant before substantial engineering analysis, design, or execution.
-- **Learn / Remember**: manual only; targeted persistence of important knowledge discovered during the current work.
-- **Backfill**: manual only; retrospective review of the current session/history to recover reusable knowledge that was not stored while the work was happening.
-- **Refine**: manual only; repository-wide maintenance of already stored Memory, regardless of whether it originally came from Remember, Backfill, or manual authoring.
+This skill has four modes:
 
-Never treat task completion by itself as permission to write memory.
+- **Recall**: retrieve relevant past knowledge before substantial work.
+- **Learn / Remember**: explicitly persist important knowledge from the current work.
+- **Backfill**: explicitly review the available current session/history and recover durable knowledge that was not stored earlier.
+- **Refine**: explicitly maintain and improve already stored active Memory.
+
+Never treat task completion by itself as permission to write Memory.
 
 ## Invocation
-
-Recommended plain-text calls:
 
 ```text
 agent_memory recall
@@ -27,84 +27,79 @@ agent_memory backfill
 agent_memory refine
 ```
 
-`agent-memory` with a hyphen is also acceptable. Natural-language equivalents are valid when intent is clear.
+`agent-memory` with a hyphen and clear natural-language equivalents are also valid.
 
-- `recall`: normally automatic, but can be requested explicitly.
-- `remember` / `learn`: save or update a specific piece of current knowledge.
-- `backfill`: review the available current session/history, select durable knowledge, deduplicate it against existing memory, persist only worthwhile items, and accumulate worthwhile Tool candidates/improvements in the shared candidate backlog.
-- `refine`: review the already stored active Memory repository, improve signal-to-noise, generalize reusable lessons, merge duplicates, archive low-value/stale content, and rebuild the index.
+Before any write, update, promotion, archival, Remember, Backfill, or Refine operation, read `MEMORY_POLICY.md`.
 
-Backfill is broader than Remember. Refine is different from both because it starts from **existing Memory files**, not from the current task/session.
-
-For detailed mode checklists:
+For detailed mode guidance:
 
 - Backfill: read `references/backfill.md` only when Backfill is invoked.
 - Refine: read `references/refine.md` only when Refine is invoked.
 
 ## Resolve memory home
 
-Resolve the memory repository in this order:
+Resolve the Memory repository in this order:
 
 1. Environment variable `AI_MEMORY_HOME`.
-2. If unavailable, infer the repository only when the installed skill link clearly resolves back to the AI_MEMORY repository.
-3. If the repository cannot be found, continue the user's task without inventing memory.
+2. If unavailable, infer it only when the installed skill link clearly resolves back to the AI_MEMORY repository.
+3. If the repository cannot be found, continue the user's task without inventing Memory.
 
 Do not assume a fixed drive such as `E:\AI_MEMORY`.
 
-Before any write, update, promotion, archival, Learn/Remember, Backfill, or Refine operation, read `MEMORY_POLICY.md`.
+# Core contract: Memory is not Source
+
+AI_MEMORY is a **source-independent reference layer**.
+
+```text
+Remember  = current work → durable Memory
+Backfill  = current session/history → recovered Memory
+Refine    = existing Memory repository → better Memory
+Recall    = Memory → reference for current work
+```
+
+Hard rules:
+
+- Do not require project Source to exist in order to keep, store, or refine Memory.
+- Do not search for project Source merely to validate Memory.
+- Do not write `source unavailable`, `source not acquired`, `needs current source check`, or equivalent repository-access state into Memory.
+- Do not lower `confidence`, change `scope`, archive, or mark `VERIFY` merely because current Source is unavailable.
+- Remember/Backfill may use code, config, tests, logs, docs, or user/team instruction **already encountered in the current work/session** as evidence.
+- Refine is **Memory-repository maintenance by default**. It must not become Source Audit.
+- Recall is different: when Memory is applied to a real task and current code/config/tests are available, the current task state is the final fact. Memory remains advisory.
+
+Project/version memories are valid even when their original Source is not currently available, as long as they are bounded appropriately, for example `C-MOS 3.5.2에서 확인된 구조` rather than `C-MOS는 항상 이 구조다`.
 
 # Shared Memory Intelligence
 
-Recall, Remember, Backfill, and Refine use the same quality model. The goal is not to preserve or replay implementation history. The goal is to turn past work into compact knowledge that improves future decisions.
-
 For every candidate, recalled item, or stored Memory under review, reason through:
 
-1. **Distill** — Is this durable knowledge, or merely an implementation summary/change log?
-2. **Transfer** — Can the underlying mechanism apply outside the current file/module/project?
-3. **Prevent** — What wrong assumption, failure, regression, or unsafe approach should a future Agent avoid?
-4. **Bound** — Under what conditions does the knowledge apply, and when should it not be generalized?
-5. **Verify** — Is it supported by code, config, tests, logs, official docs, or explicit user/team instruction?
-6. **Deduplicate** — Is there already a stronger equivalent memory?
-7. **Compress** — Can the useful knowledge be stated more simply without losing safety or applicability?
+1. **Distill** — durable knowledge or mere implementation log?
+2. **Transfer** — project-only fact or transferable mechanism?
+3. **Prevent** — what failure, wrong assumption, regression, or unsafe approach should not recur?
+4. **Bound** — when does it apply and when should it not be generalized?
+5. **Evidence** — what already-known evidence or experience supports the statement?
+6. **Deduplicate** — is there already a stronger equivalent Memory?
+7. **Compress** — can it be stated more simply without losing safety or applicability?
 
-A strong Memory usually answers, compactly:
+`Evidence` does **not** mean acquiring new Source. Use evidence already present in the current task/session or already recorded in Memory.
+
+A strong Memory usually answers:
 
 ```text
 What is the durable knowledge?
 Why does it matter?
 When does it apply?
 What should be avoided or checked?
-How was it verified?
+What evidence or experience produced it?
 ```
 
 ## Generalization rule
 
-When a specific project incident reveals a broader engineering mechanism, actively check whether a separate reusable Lesson is justified.
+When a specific project incident reveals a broader engineering mechanism, check whether a separate reusable Lesson is justified.
 
-Example:
+Store project-specific and generalized Memory separately only when they provide distinct future value. Do not create a project-less copy by simply removing names.
 
-```text
-Specific project memory:
-ETI LOTDEFECT has a concrete Qty double-deduction failure with known source/root cause.
-
-Transferable lesson:
-When updating quantity-bearing existing data, derived/header quantities must be checked for delta(new-old) handling instead of reapplying the full new value.
-```
-
-Store both only when they provide distinct future value. Do not duplicate the same prose into project + lesson files.
-
-## Low-value implementation history
-
-Treat these as low-value by default:
-
-- "implemented X";
-- changed-file/class lists;
-- progress/status summaries;
-- obvious current source structure with no hidden constraint;
-- successful build/test results with no reusable lesson;
-- information that Git diff/current source can cheaply reconstruct.
-
-Keep implementation facts only when they expose a non-obvious invariant, hidden behavior, dangerous boundary, important Source Navigation shortcut, or reusable design/verification knowledge.
+A local implementation that worked is not automatically a global rule. Separate the **general principle** from the **project-specific implementation choice**.
 
 # Mode A — Recall
 
@@ -112,106 +107,79 @@ Keep implementation facts only when they expose a non-obvious invariant, hidden 
 
 Automatically use Recall before substantial work when prior engineering context could materially improve correctness, safety, consistency, or efficiency.
 
-Typical triggers include existing-system analysis, architecture/design, code modification, debugging, review/refactoring, migration, build/deployment, database/security work, repeated work, and known project/module work.
-
-Normally skip Recall for trivial syntax questions, tiny conversions, isolated command lookups, or generic factual questions where project memory is unlikely to matter.
-
-The user does not need to ask for Recall explicitly.
+Normally skip Recall for trivial syntax questions, tiny conversions, isolated command lookups, or generic factual questions where project Memory is unlikely to matter.
 
 ## Recall procedure
 
-1. Identify the current repository/project, technology, module/component, operation, state transition, invariant, objective, failure class, and likely regression risks.
-2. Read `memory/rules/global.md` if it exists.
-3. Check relevant project memory under `memory/projects/<project>/`.
-4. Extract a small set of discriminative terms from both **names** and **mechanism**. Do not search only exact class/error keywords.
-5. Search `INDEX.md` first.
-6. If needed, search metadata/headings/content with `scripts/search-memory.ps1`, `rg`, or equivalent native text search.
-7. Load only the most relevant Memory files, normally no more than 3–7.
-8. Build a small applicability set from:
-   - active global rules;
-   - active current-project knowledge/rules;
-   - transferable lessons whose mechanism matches the current work;
-   - directly matching or strongly analogous incidents.
-9. For each item decide whether it is directly applicable, analogically reusable after validation, or not applicable because conditions differ.
-10. Extract recurrence-prevention guidance, prior wrong assumptions, dangerous shortcuts, and validation checks that can prevent repeating past mistakes.
-11. Validate relevant Memory against current source/configuration/tests before relying on it.
-12. Apply useful Memory silently unless mentioning it materially helps explain a decision.
-
-## Recall behavior
-
-Recall is not merely semantic search. It acts as a lightweight pre-mortem/code-review pass using prior experience.
-
-Before substantial execution ask internally:
-
-```text
-What similar mistake has happened before?
-What reusable Lesson applies even if it came from another project?
-What hidden project constraint must not be broken?
-What assumption should be verified instead of guessed?
-```
-
-Do not force an analogy. Cross-project Memory is useful only when the underlying mechanism and applicability conditions actually match.
+1. Identify current project/repository, technology, module/component, operation, state transition, invariant, objective, failure class, and likely regression risks.
+2. Read active global rules when relevant.
+3. Check relevant `memory/projects/<project>/` knowledge.
+4. Search `INDEX.md` using both names and mechanisms.
+5. If needed, search Memory content with `scripts/search-memory.ps1`, `rg`, or equivalent local text search.
+6. Load only the most relevant Memory files, normally 3–7.
+7. Build a small applicability set from global rules, current-project knowledge, transferable lessons, and analogous incidents.
+8. Decide whether each item is directly applicable, analogically reusable after validation, or not applicable because conditions differ.
+9. Extract recurrence-prevention guidance, prior wrong assumptions, dangerous shortcuts, and useful validation checks.
+10. Apply useful Memory as a reference.
+11. When actual execution depends on current implementation details, validate against the **current task's available source/config/tests** before changing code or making a factual claim about the present system.
 
 ## Recall constraints
 
-- Never load the whole repository merely "for context".
-- Do not treat Memory as authoritative when current code, tests, configuration, official documentation, or explicit user instructions contradict it.
+- Never load the whole Memory repository merely for context.
+- Memory is not authoritative over current code/config/tests/official docs/user instruction during actual work.
 - Do not modify Memory during Recall.
-- Do not create a Memory merely because Recall found nothing.
+- Do not create Memory merely because Recall found nothing.
 - Do not block the user's task if shared Memory is unavailable.
 
 # Mode B — Learn / Remember
 
 ## Entry condition
 
-Enter Learn/Remember only when the user explicitly asks to persist or update knowledge.
+Enter Remember only when the user explicitly asks to persist or update knowledge, for example:
 
-Examples:
+```text
+agent_memory remember
+이거 기억해
+메모리에 남겨
+이 실수 학습해
+기존 메모리 업데이트해
+```
 
-- `agent_memory remember`
-- `agent_memory learn`
-- "이거 기억해"
-- "메모리에 남겨"
-- "이번 작업 저장해"
-- "이 실수 학습해"
-- "기존 메모리 업데이트해"
-- "이 규칙 앞으로 기억해"
-
-Do not infer permission merely because the task was hard, an important bug was fixed, reusable knowledge was discovered, or the task is finished.
-
-## Learn / Remember procedure
+## Remember procedure
 
 1. Read `MEMORY_POLICY.md`.
 2. Identify the specific knowledge the user intends to preserve.
 3. Remove implementation-log noise and isolate the durable fact, constraint, lesson, decision rationale, failure pattern, or workflow.
-4. Run Shared Memory Intelligence: Distill, Transfer, Prevent, Bound, Verify, Deduplicate, Compress.
-5. Explicitly check generalization potential:
-   - project-only invariant/behavior;
-   - reusable lesson within similar modules;
-   - broadly reusable engineering lesson/rule.
-6. Explicitly derive recurrence-prevention value when relevant:
-   - what wrong assumption caused trouble;
-   - what future Agent should check first;
-   - what approach should be avoided;
-   - what verification closes the risk.
-7. Define applicability and exceptions. Do not turn one local case into a global rule without evidence.
-8. Search existing Memory before creating anything.
-9. Compare candidates by operation/state transition, error signature, technology/module, root cause, invariant, wrong approach, correct resolution, reusable pattern, and applicability scope.
-10. If substantially the same Memory exists, update it rather than creating a duplicate.
-11. If a specific project fact and a generalized Lesson both have distinct future value, they may be stored separately, but keep each concise and avoid repeating the same content.
-12. Otherwise classify and create the smallest useful Memory using `templates/MEMORY_TEMPLATE.md`.
-13. Rebuild `INDEX.md` after a successful write/update.
-14. Report briefly what was stored or updated, including whether any project-specific knowledge was generalized into a reusable Lesson.
+4. Apply Distill, Transfer, Prevent, Bound, Evidence, Deduplicate, Compress.
+5. Determine the narrowest correct scope:
+   - project/version-specific invariant or behavior;
+   - reusable lesson within similar systems;
+   - truly broad engineering lesson/rule.
+6. Derive recurrence-prevention value when relevant.
+7. Define applicability and exceptions. Do not turn one local case into a global rule.
+8. Use **evidence already available in the current work**. Do not locate or scan another project repository merely to strengthen a Memory candidate.
+9. Search existing Memory before creating anything.
+10. Update an equivalent Memory instead of creating a duplicate.
+11. If project fact and generalized Lesson have distinct future value, store both concisely without repeating the same content.
+12. Create the smallest useful Memory using `templates/MEMORY_TEMPLATE.md`.
+13. Rebuild `INDEX.md` after a successful Memory write/update.
+14. Report briefly what was stored or updated.
+
+## Remember source rule
+
+Remember is allowed to capture facts learned from current Source because the Source was part of the work. It is **not** allowed to turn Memory persistence into a second source-analysis task.
+
+If the current work only established a historical/project fact such as `version X used structure Y`, store it with that boundary. Do not mark it weak merely because another machine does not currently have that Source checkout.
 
 ## Usually worth storing
 
 - verified, non-obvious root cause;
 - meaningful Agent mistake or unsafe assumption that should not recur;
 - reusable debugging/build/deployment/database sequence;
-- verified architecture/design constraint or decision likely to matter again;
-- important project invariant, boundary, or prohibition;
-- repeated failure pattern likely to recur;
-- transferable pattern discovered from a specific project incident;
+- architecture/design constraint or decision likely to matter again;
+- important project/version invariant, boundary, or prohibition;
+- repeated failure pattern;
+- transferable pattern discovered from a specific incident;
 - correction to an existing Memory that was incomplete or wrong.
 
 ## Usually not worth storing
@@ -222,7 +190,7 @@ Do not infer permission merely because the task was hard, an important bug was f
 - generic syntax/reference knowledge;
 - temporary session state;
 - raw transcripts/logs when a compact summary is sufficient;
-- unverified speculation;
+- unverified speculation presented as fact;
 - secrets or unnecessary personal/sensitive information.
 
 # Mode C — Backfill
@@ -231,41 +199,27 @@ Do not infer permission merely because the task was hard, an important bug was f
 
 Enter Backfill only when the user explicitly requests retrospective session review/persistence.
 
-Recommended invocation:
-
 ```text
 agent_memory backfill
 ```
 
-Equivalent requests such as `agent-memory backfill`, `이 세션 백필해`, or `이 세션 회고해서 필요한 기억 반영해` are valid.
-
-The Backfill invocation is explicit permission to persist selected reusable knowledge from the available current session/history and to update the shared Tool candidate backlog when worthwhile candidates are found. It is not permission to modify unrelated project source or implement Tool candidates.
+Backfill starts from the **available current session/history**, not from a new audit of project Source.
 
 ## Backfill procedure
 
 1. Read `MEMORY_POLICY.md` and `references/backfill.md`.
-2. Determine how much of the current session/history is actually available. If earlier context is unavailable/truncated, report that limitation and never invent missing history.
-3. Review the available session retrospectively, but do **not** start by summarizing what was implemented.
-4. Run the same Shared Memory Intelligence checks used by Remember.
-5. Prioritize:
-   - mistakes, wrong assumptions, failed edits, rework, recurrence-prevention rules;
-   - verified root causes and correct resolutions;
-   - invariants, hidden constraints, boundaries, dependencies, dangerous-to-change behavior;
-   - design decisions, selected/rejected approaches and reasons;
-   - effective debugging/verification/build/deployment/DB/migration/test sequences;
-   - transferable cross-project lessons;
-   - reusable procedures/checklists;
-   - durable unresolved risks/technical debt;
-   - repeated deterministic work that may be a Tool candidate;
-   - bugs/limitations/usability issues in an existing Tool/Script that belong as `improvement` candidates.
-6. Treat plain implementation summaries/change logs as low-value and normally discard them unless they encode a hidden invariant, important navigation map, or future decision constraint.
-7. Prefer final verified outcomes over intermediate guesses. Preserve a wrong approach only when remembering why it was wrong prevents recurrence.
-8. Validate important Memory candidates against current source/config/tests when practical.
+2. Determine how much of the current session/history is actually available. Never invent missing history.
+3. Review the available session retrospectively without starting from an implementation summary.
+4. Apply the same quality checks as Remember.
+5. Prioritize mistakes, wrong assumptions, root causes, hidden constraints, design rationale, reusable verification workflows, transferable lessons, durable unresolved risks, and Tool candidates.
+6. Prefer final established outcomes over intermediate guesses.
+7. Treat code/config/test/log evidence already present in the session as optional supporting evidence.
+8. **Do not reopen, discover, or scan project Source solely to validate Backfill candidates.**
 9. Search existing Memory and merge near-duplicates.
-10. Write only durable, reusable knowledge using the existing schema/template.
-11. If Tool candidates/improvements are found, read `TOOL_CANDIDATES.md`, deduplicate by purpose/target/problem, and update according to `references/backfill.md` and `templates/TOOL_CANDIDATE_TEMPLATE.md`.
-12. Rebuild `INDEX.md` only after Memory changes. Tool candidate backlog changes do not require rebuilding the Memory index.
-13. Report briefly new/updated Memory, generalized lessons, recurrence prevention, Tool candidate changes, skipped low-value implementation summaries, and any session-history limitation.
+10. Write only durable knowledge.
+11. Update `TOOL_CANDIDATES.md` only when worthwhile Tool candidates/improvements exist, following `references/backfill.md`.
+12. Rebuild `INDEX.md` only after Memory changes.
+13. Report briefly what was stored/updated and any session-history limitation.
 
 ## Backfill constraints
 
@@ -273,75 +227,95 @@ The Backfill invocation is explicit permission to persist selected reusable know
 - Do not organize Memory around implementation completion.
 - Do not save raw conversation/logs or temporary progress.
 - Do not save unverified hypotheses as fact.
-- Do not overwrite verified final knowledge with earlier incorrect conclusions.
+- Do not acquire missing Source just to improve confidence.
 - Existing Tool/Script defects belong in `TOOL_CANDIDATES.md` as `kind: improvement`.
-- Backfill may update candidate backlog but does not implement candidates.
+- Backfill may update the candidate backlog but does not implement candidates.
 - Never add candidate-only items to `TOOL_INDEX.md`.
-- If no worthwhile durable Memory exists, create none.
-- If no Tool candidates exist, do not modify `TOOL_CANDIDATES.md`.
 
 # Mode D — Refine
 
 ## Entry condition
 
-Enter Refine only when the user explicitly asks to review/clean/improve the already stored AI_MEMORY repository.
-
-Recommended invocation:
+Enter Refine only when the user explicitly asks to review/clean/improve already stored AI_MEMORY.
 
 ```text
 agent_memory refine
 ```
 
-Equivalent requests such as `agent-memory refine`, `메모리 전체 정제해`, `기존 메모리 리파인해` are valid.
-
 ## Refine scope
-
-Refine is **origin-agnostic**. It does not care whether a Memory came from Remember, Backfill, or manual authoring.
 
 Default active scope:
 
-- `memory/rules/`
-- `memory/lessons/`
-- `memory/incidents/`
-- `memory/projects/<project>/`
+```text
+memory/rules/
+memory/lessons/
+memory/incidents/
+memory/projects/<project>/
+```
 
-`memory/archive/` is not rewritten by default. It may be consulted for conflict/dedup history, but archived content is never automatically reactivated.
+`memory/archive/` may be consulted only for Memory-history conflict/dedup context. `TOOL_CANDIDATES.md` is not part of normal Refine scope.
 
-`TOOL_CANDIDATES.md` is not part of normal Refine scope.
+## Refine source rule — hard boundary
+
+Refine is **source-blind by default**.
+
+During ordinary `agent_memory refine`:
+
+- do not locate or open project repositories outside AI_MEMORY;
+- do not inspect project file counts, implementations, branches, binaries, DBs, builds, or runtime systems;
+- do not write `source unavailable`, `source not acquired`, or `current source check required` into Memory;
+- do not reduce confidence/scope/status because project Source is unavailable;
+- do not mark `VERIFY` merely because current Source cannot be checked;
+- do not transform a historical/versioned fact into an uncertainty simply because its original Source is not mounted now.
+
+The user may explicitly request a **separate source fact-check**. That is not normal Refine behavior.
 
 ## Refine procedure
 
 1. Read `MEMORY_POLICY.md` and `references/refine.md`.
-2. Read `INDEX.md` and enumerate all active Memory files. Refine is the exception to the normal Recall rule that avoids loading the whole Memory repository, because repository-wide quality review is the explicit task.
-3. Build an internal review table before editing. Classify every Memory as:
-   - **KEEP**
-   - **REFINE**
-   - **GENERALIZE**
-   - **MERGE**
-   - **ARCHIVE**
-   - **VERIFY**
-4. Apply Shared Memory Intelligence to every Memory: Distill, Transfer, Prevent, Bound, Verify, Deduplicate, Compress.
-5. Suppress implementation-log content and preserve hidden invariants, verified root causes, recurrence prevention, design rationale, reusable workflows, and valuable Source Navigation.
-6. Check whether project-specific knowledge exposes a distinct generalized Lesson. Create one only when the reusable mechanism and applicability boundary are defensible and future value differs from the source Memory.
-7. Merge equivalent/near-equivalent Memory around the strongest verified version. Preserve genuinely new evidence/applicability/prevention information.
-8. Treat `rule` most conservatively. Do not widen, weaken, promote, or delete a rule without strong evidence.
-9. Keep project Memory when project-specific architecture/navigation/invariants are valuable. Compress obvious implementation structure.
-10. Keep incidents when the concrete failure + root cause still has diagnostic value, even if a generalized Lesson also exists.
-11. For stale or conflicting items, validate against current code/config/tests when available. If unresolved, mark/retain uncertainty rather than inventing certainty.
-12. Archive low-value/stale/superseded content when history is still useful. Remove only content that is clearly disposable and has no traceability value.
+2. Read `INDEX.md` and enumerate all active Memory files.
+3. Build an internal review table before editing. Classify every Memory as KEEP / REFINE / GENERALIZE / MERGE / ARCHIVE / VERIFY.
+4. Apply Distill, Transfer, Prevent, Bound, Evidence, Deduplicate, Compress using Memory content and already recorded evidence only.
+5. Suppress implementation-log content while preserving hidden invariants, root causes, recurrence prevention, design rationale, reusable workflows, and valuable navigation/version knowledge.
+6. Check project-specific knowledge for a defensible generalized Lesson without over-generalizing.
+7. Merge equivalent Memory around the strongest useful version.
+8. Treat `rule` most conservatively.
+9. Keep project/version Memory when architecture/navigation/invariants remain useful as historical reference.
+10. Keep incidents when the concrete failure/root cause still has diagnostic value.
+11. For Memory-internal uncertainty or contradictions, use existing Memory metadata/evidence/user corrections. If unresolved, use `VERIFY` without performing Source Audit.
+12. Archive low-value/superseded Memory when history is still useful; remove only clearly disposable duplicates/noise.
 13. Rebuild `INDEX.md` after all Memory changes.
-14. Run `doctor.ps1` or equivalent structural validation when practical.
-15. Report only counts and major quality changes, not a new implementation-style summary of every Memory.
+14. Run `doctor.ps1` or equivalent **AI_MEMORY structural validation** when practical.
+15. Report counts and major quality changes only.
+
+## VERIFY semantics
+
+`VERIFY` means **the Memory itself is uncertain**, for example:
+
+- it was originally recorded as a hypothesis;
+- two active Memory items make directly incompatible claims;
+- metadata/body contradict each other;
+- evidence recorded inside Memory is insufficient to distinguish competing claims.
+
+The following do **not** mean VERIFY:
+
+```text
+project source is not checked out
+source path is unknown
+current workstation lacks the project
+original implementation file cannot be opened now
+```
 
 ## Refine constraints
 
 - Refine modifies Memory only when explicitly invoked.
-- Refine is repository maintenance, not project-source implementation work.
-- Do not generalize beyond evidence.
+- Refine is Memory maintenance, not project-source implementation or audit work.
+- Do not generalize beyond evidence already available in Memory.
 - Do not reduce specificity merely to make Memory shorter.
 - Do not optimize for fewer files; optimize for future decision value and low noise.
-- Project + incident + lesson may all coexist when each provides distinct future value.
-- If the Memory repository is too large for one safe pass, process explicit batches and do not claim full completion until all active Memory has been reviewed.
+- Project + incident + lesson may coexist when each provides distinct future value.
+- `scope: global` and GENERALIZE candidates must pass the generalization boundary test in `MEMORY_POLICY.md`.
+- If the Memory repository is too large for one safe pass, process explicit batches and do not claim completion until all active Memory has been reviewed.
 
 # Classification
 
@@ -349,8 +323,8 @@ Use the narrowest appropriate category.
 
 - `rule`: verified durable instruction that should constrain future work repeatedly.
 - `lesson`: reusable problem-solving, prevention, validation, or engineering pattern.
-- `incident`: a concrete failure and its verified root cause/resolution.
-- `project`: knowledge valid only for a specific project/repository.
+- `incident`: concrete failure and its known root cause/resolution.
+- `project`: knowledge valid for a specific project/product/version/repository.
 
 Prefer `lesson` or `incident` when uncertain. Do not promote uncertain knowledge to `rule`.
 
@@ -366,13 +340,9 @@ If one exists:
 - add only genuinely new evidence, applicability constraints, recurrence-prevention guidance, or a better solution;
 - do not create parallel versions of the same lesson.
 
-Do not rewrite unrelated Memory files outside the active mode's scope.
-
 # Rule promotion
 
-Promotion to `rule` requires both importance and verification. Repetition alone is not sufficient.
-
-Useful evidence includes repeated occurrence across independent tasks, source/config proving an invariant, tests/builds validating the constraint, official docs, or explicit user/team instruction.
+Promotion to `rule` requires importance and already-known verification. Repetition alone is not sufficient, and Refine must not perform new Source Audit merely to justify promotion.
 
 # File locations
 
