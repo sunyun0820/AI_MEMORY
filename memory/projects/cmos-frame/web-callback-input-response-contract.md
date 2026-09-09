@@ -8,42 +8,26 @@ tags: [framework, cmos, callback, apiMapping, servletMapping, abstract-event, co
 status: active
 confidence: high
 created: 2026-09-08
-updated: 2026-09-08
+updated: 2026-09-09
 last_seen: 2026-09-08
 occurrences: 1
 source_agent: codex
 ---
 
-# C-MOS 외부 JSON 콜백의 입력·응답 경계
+# C-MOS 외부 JSON 콜백의 입력·응답·실행 경계
 
-## Context
+## Core Knowledge
 
-C-MOS 기반 프로젝트에서 외부 시스템의 CMOS 봉투가 아닌 JSON 콜백을 기존 API 경로로 받을 수 있는지와 전용 Servlet이 필요한 조건을 검토했다. `AbstractEvent`/`CoreRule`의 업무 실행과 `BaseDispatcher`/`Dispatcher`의 메시지 변환을 현재 소스에서 대조했다.
+CoreRule.getWebData는 WEBDATA 접근 helper이며 모든 수신 JSON의 허용 스키마는 아니다. 파싱된 object는 getRequestData().getMap 또는 상속된 getMessageMap으로 접근할 수 있다. 다만 필드 접근 가능성과 실제 endpoint가 외부 요청을 받아 처리하는 것은 별도 계약이다.
 
-## Symptom
+## Applicability / Adapter Selection
 
-외부 콜백 JSON을 `CoreRule`로 처리하려 하면 `getWebData()`가 기대하는 `WEBDATA` 구조와 맞지 않아 Servlet이 입력 수신에 필수인 것처럼 보였다. 반대로 외부 응답이 `code/result/message/data`로 고정된 경우에는 표준 API 응답을 그대로 사용할 수 없다.
-
-## Root Cause
-
-`CoreRule`의 `getWebData()`는 MES `MessageData.WEBDATA` helper일 뿐 입력 JSON 전체의 허용 스키마를 정의하지 않는다. `AbstractController#getMessageMap()` 또는 `CoreRule#getRequestData().getMap()`으로 파싱된 JSON object의 원문 map을 읽을 수 있다. 하지만 표준 Dispatcher는 `MessageData` 응답을 만들고 `toMessageString()`으로 직렬화하므로, `apiMapping`의 이벤트만으로 외부의 임의 응답 스키마를 대체할 수 없다.
-
-## Wrong Approach
-
-처음에는 `CoreRule` 경로가 CMOS 요청 형식만 받을 수 있다고 넓게 판단했다. 실제 제약은 입력 필드가 아니라 표준 Dispatcher가 생성하는 응답 계약이며, `getWebData()`를 원문 콜백의 유일한 접근 방식으로 보면 안 된다.
-
-## Correct Approach
-
-1. 외부 JSON이 문법적으로 유효한 object인지 확인한다.
-2. 외부가 CMOS 표준 응답을 허용하면 `apiMapping`에 `CoreRule` 또는 generic `AbstractEvent`를 연결한다.
-3. Rule/Event에서는 `getWebData()` 대신 `getRequestData().getMap()` 또는 `getMessageMap()`을 사용해 원문 필드를 읽고 Manager를 호출한다.
-4. 외부가 `{"code":200,"result":true,"message":"","data":{}}`처럼 특정 응답을 요구하면 `servletMapping` 어댑터에서 원문 수신·검증·응답 직렬화를 직접 제어한다.
-5. MES Manager, 표준 트랜잭션, `messageValidation/process` 관례가 필요하면 `AbstractEvent`보다 `CoreRule`을 우선한다. generic `AbstractEvent` 직접 `apiMapping`이 가능한지는 웹 모듈 로더의 실제 구현으로 smoke test한다.
-
-## Reusable Rule
-
-외부 콜백 연동에서 Servlet 선택 기준은 수신 JSON의 모양이 아니라 외부가 요구하는 응답 계약이다. 입력만 유연하게 처리할 때는 기존 API Dispatcher와 `CoreRule`/`AbstractEvent`를 재사용하고, 응답 스키마까지 고정일 때만 `servletMapping` 어댑터를 둔다.
+- 기존 apiMapping/CoreRule을 재사용하려면 메시지 파서, URL 매핑, preStart/preExecute와 인증·스키마 필터가 외부 payload를 허용하는지 먼저 확인한다. 문법적으로 유효한 JSON object라는 사실만으로 충분하지 않다.
+- 원본에서 확인한 표준 Dispatcher는 MessageData 응답을 생성·직렬화한다. getWebData 대신 원문 map을 읽는 변경이 외부의 code/result/message/data 같은 응답 스키마까지 바꾸지는 않는다.
+- 외부가 표준 응답을 허용하면 기존 CoreRule 경로를 검토한다. 임의 응답을 요구하면 servletMapping 또는 별도로 검증된 Dispatcher/어댑터 확장 경로가 필요하다. Servlet이 유일한 해결책이라는 규칙은 아니다.
+- Servlet으로 우회하면 기존 Dispatcher의 Context 생성·인증·commit/rollback·close 책임을 자동 상속한다고 가정하지 않는다. Manager 호출에 필요한 실행 환경을 명시적으로 확인한다.
+- CoreRule은 messageValidation/process·MES DbContext 관례를 사용한다. generic AbstractEvent의 직접 apiMapping 지원은 실제 웹 로더와 매핑 타입을 확인해야 하며, 클래스 상속만으로 연결 가능성을 확정하지 않는다.
 
 ## Verification
 
-`AbstractEvent`, `AbstractController`, `CoreRule`, `BaseDispatcher`, MES `Dispatcher`, `MessageData` 소스를 대조했다. C-MOS 표준 응답의 `MessageData` 생성·직렬화와 Rule/Event 실행 순서를 코드로 확인했으며, 실제 MES 기동이나 외부 callback runtime은 수행하지 않았다.
+원본은 AbstractEvent/AbstractController/CoreRule, BaseDispatcher, MES Dispatcher와 MessageData의 입력 접근 및 응답 직렬화를 정적으로 대조한 기록이다. 2026-09-09 현재 AbstractEvent가 AbstractController를 상속하고 getMessageMap을 사용할 수 있음, CoreRule의 getRequestData/getWebData helper를 다시 확인했다. 실제 callback·Servlet·서버·DB 검증은 수행하지 않았다. [Hyosung 사례](../hyosung/agv-integration-boundaries.md)는 별도의 프로젝트 배치 예다.

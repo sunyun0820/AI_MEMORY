@@ -6,7 +6,7 @@ project: cmos-starter
 domain: web-server
 tags: [cmos-starter, plugin-jetty, jetty, handler-chain, security, query-string, web-filters]
 status: active
-confidence: high
+confidence: medium
 created: 2026-09-09
 updated: 2026-09-09
 last_seen: 2026-09-09
@@ -14,53 +14,29 @@ occurrences: 2
 source_agent: antigravity
 ---
 
-# C-MOS Starter plugin-jetty 핸들러 체인 구조와 쿼리스트링 보안 제약
+# C-MOS Jetty 정적 리소스와 민감 query 차단의 경계
 
-## Context
+## Core Knowledge
 
-`cmos-starter`의 `plugin-jetty`는 C-MOS 웹 애플리케이션의 내장 웹 서버(Jetty 11) 생명주기와 HTTP 요청 처리를 담당하는 핵심 모듈이다. 보안 취약점 진단(AppScan "조회의 비밀번호 매개변수") 조치 과정에서 정적 리소스와 API 핸들러의 실행 분기 및 쿼리스트링 보안 제약 구조가 확인되었다.
+원본 plugin-jetty 조사에서 ApiHandler는 resourceBase에 존재하는 정적 리소스를 확인하면 API 처리를 건너뛰었다. 따라서 API용 webFilters 설정만으로 해당 정적 요청이 차단된다고 가정하면 안 된다. 실제 전체 요청 보안 제어 위치는 배포 핸들러·프록시 흐름을 확인해 정한다.
 
-## Invariant & Module Boundaries
+## Handler Contract
 
-### 1. HandlerCollection 등록 순서와 실행 흐름
-`JettyServer.java`의 `start()` 메소드에서 `HandlerCollection handlers`에 등록되는 순서는 다음과 같다:
+2026-09-09 pull 이후 JettyServer.start의 등록 순서:
 
-1. `addHandlerBySensitiveQueryBlock(handlers)`: 모든 HTTP 요청의 쿼리스트링 민감 파라미터 사전 검사 (보안 최우선 핸들러)
-2. `addHandlerByEtag(handlers, context)`: ETag 및 캐시 헤더 처리
-3. `addHandlerByNotAccessUri(handlers)`: `userNotAccessUris`에 정의된 비인가 URI 차단
-4. `addHandlerByApi(handlers, server, context)`: `ApiHandler` (C-MOS API 라우팅 및 `webFilters` 실행)
-5. `addHandlerByWeb(handlers, context)`: `WebAppContext` (정적 HTML, CSS, JS 파일 서빙)
+HttpMethodBlock → SensitiveQueryBlock → Etag(캐시 설정 조건부) → NotAccessUri → Api → WebAppContext.
 
-### 2. 정적 리소스 서빙과 webFilters의 실행 경계
-`ApiHandler.java`는 요청 처리 시작 시 `context.getResource(url)`을 검사한다:
-```java
-Resource resource = context.getResource(url);
-if (resource != null && resource.exists()) {
-    isResource = true;
-    return;
-}
-```
-- **중요 경계**: `/login.html`, `/mobile/login.html` 등 `resourceBase`(`wwwroot`)에 존재하는 정적 파일 요청은 `ApiHandler`에서 즉시 탈출(return)하여 5번 `WebAppContext`의 Jetty `DefaultServlet`으로 직행한다.
-- **불변조건**: `web.json`에 등록된 `webFilters`(`CorsWebApiFilter`, `RequestSchemaWebFilter`, `SecurityWebFilter` 등)는 **정적 웹콘텐츠 요청 시 절대 실행되지 않으며, 오직 API 요청에만 적용된다**.
-- 따라서 정적 HTML 요청을 포함한 전체 서버 차원의 HTTP 보안 제어는 반드시 `addHandlerByApi` 이전의 Jetty Handler 레벨에서 처리해야 한다.
+민감 query 차단은 request.getQueryString의 파라미터 키를 검사하여 HTTP 400과 handled 표시를 설정하고, 원문 값 대신 URI·일치 키·IP를 기록하는 방식이었다. /login.html·/mobile/login.html의 정적 파일과 /login API가 같은 앞단 검사를 거치는 의도로 추가됐다.
 
-### 3. 쿼리스트링 민감 정보 보안 정책 (Password in Query String)
-- **제약**: 비밀번호, 인증 토큰 등 민감 정보는 URL 쿼리스트링에 위치해서는 안 되며, 반드시 암호화된 요청 본문(Body)으로 전송되어야 한다.
-- **정상 웹데이터와의 격리**: 정상 로그인(`POST /login`) 및 비즈니스 API 호출은 본문 JSON의 `WEBDATA` 배열을 사용하며, 요청 URL 뒤에 `?` 쿼리스트링이 없으므로 `request.getQueryString()`은 `null`이다.
-- **차단 메커니즘**: `addHandlerBySensitiveQueryBlock`은 `request.getQueryString()`만 검사하므로 본문 스트림이나 정상 API 동작에 0%의 부작용을 보장하면서, 주소창에 파라미터를 노출하는 `password1`, `password`, `pwd`, `passwd` 등의 쿼리 파라미터를 HTTP 400으로 즉시 차단한다.
-- **로그 유출 방지 불변조건**:
-  - `findSensitiveQueryParam`은 `=` 앞의 키 이름(`rawName`)만 추출하여 반환한다.
-  - 차단 로깅 시 `logger.warn("... URI: {}, Param: {}, IP: {}", target, matchedParam, ip)` 형식으로 파라미터명만 기록되고, 사용자가 입력한 패스워드 값은 절대 저장되거나 로깅되지 않는다.
-  - `baseRequest.setHandled(true)` 호출로 후속 핸들러/디스패처 전파를 즉시 차단하므로 일반 `[ACCESS]` 로그에도 쿼리 파라미터 값이 남지 않는다.
+## Applicability / Recurrence Prevention
 
-### 4. 브랜치 및 의존성 불변조건
-- `web-ui`의 `pom.xml`은 `plugin-web-starter:3.5.3-SNAPSHOT` 및 `plugin-jetty:3.5.3-SNAPSHOT`을 참조한다.
-- `cmos-starter` 저장소(`sf/solution/c-mos/plugin.git`)는 로컬 체크아웃 기본값이 `ver3.5.2`일 수 있으나, 활성 보안 수정 브랜치는 `origin/3.5.3-SNAPSHOT`이다. 작업 및 빌드 시 반드시 `3.5.3-SNAPSHOT` 브랜치를 기준으로 진행해야 한다.
+- 이 구조는 해당 plugin-jetty 조사본의 계약이다. 모든 C-MOS 버전에서 webFilters가 정적 리소스에 절대 실행되지 않는다는 일반 규칙은 아니다.
+- handled 표시와 등록 순서만으로 모든 후속 핸들러·접근 로그·앞단 프록시의 동작까지 보장하지 않는다. 실제 핸들러의 handled 검사와 로그 지점을 확인한다.
+- query 검사만 한다는 것은 body를 읽지 않는다는 뜻이다. query가 붙은 POST, 업무상 같은 키, 디코딩·중복 키 처리까지 부작용이 0%라는 뜻은 아니다.
+- body 사용을 별도 애플리케이션 암호화나 전송 보호의 증거로 해석하지 않는다. 비밀번호·인증 토큰을 모두 같은 전송 필드로 통일하는 규칙도 아니다.
+- 값 비기록 표본을 전체 로그·브라우저·프록시의 무노출 보장으로 확대하지 않는다.
+- 당시 web-ui 의존성/보안 수정은 3.5.3-SNAPSHOT으로 기록됐다. 브랜치·artifact·실행 JAR을 현재 작업마다 확인하고, 과거 브랜치 이름을 강제 checkout 명령이나 현재 사용자 승인으로 쓰지 않는다.
 
 ## Verification
 
-- `plugin-jetty`에 `addHandlerBySensitiveQueryBlock`, `findSensitiveQueryParam`, `isSensitiveParamName` 구현 후 `mvn clean compile` 및 `mvn install` 성공 (`3.5.3-SNAPSHOT`).
-- **라이브 서버 실증 (2026-09-09, `localhost:22112`)**:
-  - `POST /login?password=TEST_ONLY` 및 `GET /login?password=TEST_ONLY` → `HTTP 400 Bad Request` 차단 확인.
-  - `GET /login.html?password1=TEST_ONLY` 및 `GET /mobile/login.html?password1=TEST_ONLY` → `HTTP 400 Bad Request` 차단 확인.
-  - `curl "http://localhost:22112/login?password=MySecretPassword999!"` 주입 테스트 후 전체 서버 로그 전수 검사 결과: `Param: password`만 기록되고 패스워드 값(`MySecretPassword999!`)은 0건 검출(미기록) 확인.
+원본에는 2026-09-09 plugin 빌드·install 성공, 정적 로그인/API의 민감 query 400, 시험값의 조사 로그 미검출이 기록돼 있다. pull 이후 D:/thira/cmos frame/plugin/plugin-jetty/src/main/java/com/thirautech/cmos/jetty에서 JettyServer.java:158, :357의 등록·차단 분기와 handler/ApiHandler.java:82의 정적 리소스 우회를 정적으로 재확인했다. 민감 키 검사는 &/; 분리, 원래 키 및 UTF-8 1회 디코딩 키를 대상으로 하며 body를 읽지 않는다. 소스 부재 제한은 해소됐지만 실제 서버·HTTP·로그·배포 테스트는 이번에 재실행하지 않았다. 화면 구현 확인은 [BSMES 로그인 사례](../../lessons/appscan-password-in-query-prevention.md)를 참조한다.

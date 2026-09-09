@@ -8,35 +8,29 @@ tags: [hyosung, agv, rest, callback, service, ui, scope, verification]
 status: active
 confidence: high
 created: 2026-09-08
-updated: 2026-09-08
+updated: 2026-09-09
 last_seen: 2026-09-08
 occurrences: 1
 source_agent: codex
 ---
 
-# Hyosung AGV 연동 작업 경계와 검증 범위
+# Hyosung AGV 예제의 모듈 배치와 검증 경계
 
-## Context
+## Core Knowledge
 
-Hyosung AGV REST 송신 및 외부 JSON 콜백 예제를 `real_edu` 프로젝트에 구성하고 사용법을 정리했다. 프로젝트 요청에서 실제 수정 허용 범위와 분석 전용 프레임워크 범위를 명시적으로 분리했다.
+원본 real_edu 사례는 AGV REST 송신과 콜백 업무를 service에, Servlet·웹 매핑을 ui에 두고 Framework/MES-Core는 분석 근거로만 사용했다. 이는 해당 요청에서 승인된 작업 범위이며 이후 작업의 자동 수정·실행 권한이 아니다.
 
-## Verified Boundary
+## Navigation / Applicability
 
-- 수정 허용: `C:\Users\<project-user>\Desktop\real_edu\service`, `C:\Users\<project-user>\Desktop\real_edu\ui`
-- 분석 전용: `E:\0.Project\cmos-frame`, `E:\0.Project\mes-core`의 프레임워크·코어 소스
-- AGV API 예제 Java는 service `example/testoutbound`, 콜백 수신 Java는 service `example/testcallback`, Servlet/웹 매핑은 ui에 둔다.
-- 기존 사용자 변경으로 보이는 `ui/.factorypath`, `ui/pom.xml`은 관련 작업에서 임의로 되돌리거나 커밋하지 않는다.
+- service의 example/testoutbound: 송신 예제.
+- service의 example/testcallback: 콜백 업무.
+- ui의 rest.json/web.json 및 Servlet: 외부 요청·응답 어댑터.
+- 원본 checkout은 사용자 Desktop의 real_edu, 인접 cmos-frame/mes-core는 별도 E: 경로였다. 다른 머신에서는 실제 저장소와 매핑부터 확인한다.
+- 기존 사용자 변경을 구분해 보존한다. 당시 .factorypath/POM의 변경 상태를 현재도 남은 변경이라고 저장하지 않는다.
+- C-MOS 콜백의 입력·응답 선택 조건은 [프레임워크 메모리](../cmos-frame/web-callback-input-response-contract.md)를 참조한다.
 
-## Verification Boundary
+## Verification / Authorization Boundary
 
-- 허용된 정적/격리 검증: Java 컴파일, 설정 매핑 확인, 문서 구조 확인, 로컬 더미 대상 기준 테스트
-- 별도 승인 없이 하지 않는 것: DB 접속/쿼리, 실제 외부 AGV 호출, MES 운영 반영, Git commit/push
-- 실제 MES 기동 및 외부 callback 송수신은 정적 검증과 구분해 보고한다. 실행하지 않았으면 통과했다고 표현하지 않는다.
+원본에는 예제·매핑·HTML 문서 정적 확인과 TestCallbackServlet의 Java 17 대상 컴파일 기록이 있다. 실제 MES 기동, DB, 외부 AGV 송수신은 검증하지 않았다.
 
-## Reusable Rule
-
-Hyosung AGV 연동 작업은 service/ui에만 최소 변경하고 프레임워크·코어는 소스 근거 분석만 수행한다. 설정·컴파일·문서 검증과 실제 MES/외부 연동 검증을 분리해 결과를 보고한다.
-
-## Verification
-
-이번 작업에서 Test 송신/콜백 예제, ui `rest.json`/`web.json`, 신규 HTML 매뉴얼을 정적으로 확인했고 `TestCallbackServlet`의 Java 17 대상 컴파일을 확인했다. DB와 실제 외부 시스템에는 접속하지 않았다.
+현재 작업의 허용 범위는 최신 사용자 지시와 프로젝트 정책으로 정한다. 메모리에 적힌 과거 컴파일·더미 테스트 허용을 DB·실제 외부 호출·운영 반영·Git 변경의 승인으로 확대하지 않는다. 이번 Refine은 원본 기록의 범위를 정리했으며 예제 실행이나 외부 연동 검증은 하지 않았다.

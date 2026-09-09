@@ -48,10 +48,6 @@ BaseDispatcher.executeInternal의 정상 메시지 처리 흐름:
 
 ## Verification
 
-2026-09-08 현재 `framework/api/.../Factory.java`와 `framework/iia/.../BaseDispatcher.java`의 분기·호출 순서를 정적 대조했다. 서버 시작·요청 호출·DB 검증은 이번 정제에서 수행하지 않았다.
+2026-09-08 Factory.java와 BaseDispatcher.java를 정적으로 대조한 기록이다. 그때 확인한 Database → Context → Entry 순서와 실제 destroy 순서를 보존한다. 2026-09-09의 병합 자체는 새 소스·서버·DB 검증이나 새로운 장애 발생 증거가 아니며 occurrences=2를 추가 증가시키지 않는다.
 
-원격의 초기화 순서 정정은 [권한 캐시 bootstrap 사고](../../incidents/mes-core-api-auth-bootstrap-order.md)의 의존성 기록과 함께 보존했다. 이번 병합에서 현재 Framework 소스·서버·DB를 재검증하지 않았으며, 본문의 현재 순서는 원격 검토 당시 관찰이다. 과거의 Entry → Context 순서 및 종료를 단순 역순으로 설명한 내용은 정정된 계약으로 사용하지 않는다.
-
-## Related References
-
-- 로컬에서 추가한 스레드풀 및 동시성 제어 구조: [MEM-20260909-frame-threadpool](threadpool-and-concurrency-architecture.md).
+일반 요청 수명주기를 timeout·전체 작업 종료 보장으로 확대하지 않는다. 별도 실행 경계는 [스레드풀 메모리](threadpool-and-concurrency-architecture.md)를 참조한다.

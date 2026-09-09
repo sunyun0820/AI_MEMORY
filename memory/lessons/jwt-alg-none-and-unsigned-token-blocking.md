@@ -1,7 +1,7 @@
-﻿---
+---
 id: MEM-20260909-171501
 type: lesson
-scope: global
+scope: project
 project: mes-core
 domain: security
 tags: [jwt, alg-none, signature-validation, security-web-filter, authentication-bypass, login-boundary]
@@ -14,45 +14,29 @@ occurrences: 1
 source_agent: antigravity
 ---
 
-# JWT alg=none 및 서명 누락 위조 토큰의 선제 차단과 로그인 엔드포인트 토큰 검증 경계
+# mes-core 공개 로그인 경로의 제한적 토큰 검사와 호환 경계
 
 ## Core Knowledge
 
-인증 필터(`SecurityWebFilter`)는 토큰 검증 대상 URL(`validTokenUrlMethodMapList`: `/api`, `/usermenu` 등)이 아닌 공개/로그인 엔드포인트(`/login`)라도, 요청 헤더에 `Authorization`이 포함되어 있다면 `alg: none`이거나 서명부(3번째 파트)가 누락된 위조 JWT를 컨트롤러 진입 전 즉시 `HTTP 401 Unauthorized`로 선제 차단해야 한다.
+SecurityWebFilter의 validUrl 비대상 경로는 rejectUnsignedToken으로 제한적인 형식 검사를 한다. 이는 이전 토큰을 붙여 /login·/loginwidget을 호출하는 해당 클라이언트의 재로그인 호환 분기이며 일반 JWT 인증 정책이 아니다. 이 분기를 통과했다는 사실은 토큰 서명이나 사용자 인증 성공을 뜻하지 않는다.
 
-반면, 만료 토큰(expired)이나 정상 서명 형식(`HS256` 등)의 토큰은 브라우저(localStorage)에 남은 이전 토큰을 헤더에 달고 재로그인을 시도하는 클라이언트 관례를 지원하기 위해 필터를 통과시켜 로그인 비즈니스 로직(자격 증명 검증)에 위임한다.
+## Source Contract
 
-## Applicability
+현재 doStart는 ignore method 처리 → validUrl 분기 → 보호 URL의 WebUtil.getAuthentication 및 Site/IP·command/SQL 권한 검사 순서다.
 
-- **적용 대상**: JWT 기반 인증 필터(`SecurityWebFilter`) 및 로그인/공개 엔드포인트 경계
-- **적용 조건**: 토큰 검증 비대상 URL이지만 클라이언트가 Authorization 헤더를 붙여 요청할 수 있는 환경
-- **예외/주의**: 만료 토큰까지 공개 엔드포인트에서 일괄 차단하면 재로그인 자체가 불가능해질 수 있으므로, **"서명 누락 / `alg: none` 위조 토큰만 선별 차단"**하는 정책 경계를 유지해야 한다.
+validUrl=false 분기의 rejectUnsignedToken은:
 
-## Avoid / Recurrence Prevention
+- Authorization이 비어 있으면 통과시킨다.
+- Bearer 접두사를 정리하고 점으로 나눈 결과가 **3개 미만**이거나 세 번째 부분이 비어 있으면 거부한다. 정확히 3부분인지 검사하는 구현은 아니다.
+- header 디코딩/JSON 변환 실패, alg 누락·빈값·대소문자 무관 none이면 거부한다.
+- 그 외에는 true를 반환한다. 여기서는 실제 서명 일치, 허용 알고리즘 목록, 만료·issuer·audience를 검증하지 않는다. alg=HS256처럼 보이고 세 번째 부분이 존재하는 것은 정상 서명의 증거가 아니다.
 
-- **비인가 경로에 대한 오판 방지**: "`/login`은 로그인 전 엔드포인트이므로 인증 필터(`SecurityWebFilter`)의 영향을 전혀 받지 않는다"고 가정하지 말 것.
-- **과도한 검증으로 인한 기능 장애 방지**: 로그인 화면 진입 시 만료된 토큰의 유효성 전체(만료 시간 검증 등)를 검사하면 사용자가 로그아웃/만료 후 다시 로그인하는 정상 시나리오가 401에 막혀 무한 루프에 빠질 수 있으므로, 만료 검증과 서명 위조 검증을 분리할 것.
+## Applicability / Recurrence Prevention
 
-## Root Cause & Mechanism
+현재 클라이언트와 인증 필터의 공개 로그인 계약을 유지·변경할 때만 참고한다. 보호 URL까지 이 제한 검사를 대신 적용하거나 미검증 claim을 사용자 신원·권한으로 신뢰하지 않는다. 공개 경로에서 토큰을 완전히 검사할지 무시할지는 그 경로의 실제 인증 계약에 따라 별도로 결정한다.
 
-1. **CVE/취약점 배경**: JWT의 `alg: none` 취약점은 공격자가 헤더에 `{"alg":"none"}`을 설정하고 서명부를 비워 서버가 서명 검증을 건너뛰고 페이로드(권한, 사용자 ID)를 신뢰하게 만드는 고전적 인증 우회 공격이다.
-2. **C-MOS 필터 분기 설계 (`SecurityWebFilter.java`)**:
-   ```java
-   if (!validUrl(request)) {
-       // 토큰 검증 대상이 아닌 URL이라도 서명 없는 위조 토큰은 거부
-       return rejectUnsignedToken(request);
-   }
-   ```
-3. **위조 판정 기준 (`rejectUnsignedToken`)**:
-   - Authorization 헤더의 JWT가 3개 파트로 분리되지 않거나, 3번째 파트(서명부)가 비어있는 경우
-   - 1번째 파트(Header Base64) 디코딩 결과 `alg` 필드가 없거나 대소문자 무관 `"none"`인 경우
-   - 위 조건 충족 시 비즈니스 로직 이전에 `WebUtility.sendUnAuth(..., "unsigned Authentication Token")`로 401 JSON 응답 반환.
+“만료 토큰은 항상 허용해야 한다”, “공개 URL은 무조건 이 검사로 충분하다”로 일반화하지 않는다. 다른 URL 설정, ignore method, 토큰 없이 오는 요청과 실제 로그인 자격 증명 검증까지 구분한다.
 
 ## Verification
 
-- **라이브 서버 실증 (2026-09-09, `http://localhost:22112/login`)**:
-  1. `alg: none` 토큰(서명부 없음)으로 `POST /login` 요청 시:
-     - 응답: `HTTP 401 Unauthorized` (`{"MESSAGE":"Unauthorized","CODE":401,"ISSUCCESS":false}`)
-     - 서버 로그: `[ACCESS DENIED][URL:/login] ... [unsigned Authentication Token]` 즉시 차단 확인.
-  2. `alg: HS256` 서명부 포함 토큰으로 동일 요청 시:
-     - 응답: `SecurityWebFilter` 통과 후 `AbstractLoginController`에서 자격 증명 검증 수행 → `HTTP 200 OK`, `ISSUCCESS: false` (`[MES-0120] Login is denied by login policy`) 반환 확인.
+2026-09-09 현재 cmos frame/core/.../web/filter/SecurityWebFilter.java의 doStart, rejectUnsignedToken, isNoneOrMissingAlg를 정적 확인했다. 원본 로컬 시험은 none 토큰의 401과 서명부가 있는 입력의 로그인 로직 진입 후 ISSUCCESS=false 응답을 기록한다. 후자는 로그인 성공이나 암호학적 서명 검증 증거가 아니다. 이번 Refine에서 HTTP·계정·토큰 시험은 수행하지 않았다.

@@ -28,11 +28,6 @@ Windows의 여러 JDK 설치 환경에서 Maven 타깃 오류가 나면 같은 �
 
 ## Verification
 
-원본 기록에서는 PATH의 Java가 21인데 JAVA_HOME은 Java 8이어서 Java 17 타깃 빌드가 실패했다. 세션 JAVA_HOME을 설치된 JDK 21로 바꾼 뒤 `cmos-frame`, `busan_\service` 및 로컬에서 추가 확인한 `cmos-starter`(`plugin-jetty`, `plugin-web-starter`)의 `mvn compile` 성공(`BUILD SUCCESS`)이 기록되어 있다. 이번 Refine에서는 현재 JDK 설치나 빌드를 재검증하지 않았으므로 특정 경로·버전을 현 환경의 정답으로 고정하지 않는다.
+원본에서 PATH는 Java 21, JAVA_HOME은 Java 8이어서 Java 17 타깃 빌드가 실패했고, 해당 세션을 프로젝트가 지원하는 설치 JDK 21로 바꾼 뒤 cmos-frame·busan service가 컴파일됐다고 기록했다. 2026-09-09 cmos-starter의 plugin-jetty·plugin-web-starter에서도 같은 원인/해결을 추가 확인한 기록이 있다.
 
-### 과거 환경 및 추가 검증 기록
-
-- 당시 PATH의 런타임은 OpenJDK 21 (`Temurin-21.0.4+7`)이었지만 JAVA_HOME은 `C:\Program Files\Java\jdk1.8.0_202`로 설정되어 있었다. 컴파일 오류는 `Fatal error compiling: invalid target release: 17 -> [Help 1]`였다.
-- 해당 세션의 JAVA_HOME을 `C:\Program Files\Eclipse Adoptium\jdk-21.0.4.7-hotspot`으로 변경해 해결했다. 이 경로는 과거 환경의 증거이며 현재 설치 경로나 모든 프로젝트의 권장 JDK를 뜻하지 않는다.
-- 2026-09-09 로컬 기록은 `cmos-starter`의 `plugin-jetty`, `plugin-web-starter`에도 같은 원인과 해결이 적용됐음을 추가한다. `occurrences: 2`는 이 기존 추가 기록을 보존한 값이며 병합을 새로운 장애 발생으로 세지 않는다.
-- 이번 병합에서는 JDK 설치, 컴파일, 테스트를 재실행하지 않았다. 원격의 toolchain·별도 javac 진단 지침과 로컬의 추가 성공 사례를 함께 보존했다.
+occurrences=2는 이 두 기록을 유지한 값이다. 반복 정제·병합을 새로운 발생으로 세지 않으며, 특정 과거 설치 경로를 현재 환경의 정답으로 보존하지 않는다. 이번 Refine에서 JDK 설치·Maven 컴파일·테스트는 재실행하지 않았다.
