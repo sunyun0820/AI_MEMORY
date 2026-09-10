@@ -30,6 +30,7 @@
 - [MEM-20260908-hyosung-agv-boundaries] Hyosung AGV 예제의 모듈 배치와 검증 경계 - memory/projects/hyosung/agv-integration-boundaries.md | project: hyosung
 - [MEM-20260908-mescore-api-auth-runtime] mes-core API 권한 검사와 캐시 교체의 실행 경계 - memory/projects/mes-core/api-authorization-runtime-and-cache.md | project: mes-core
 - [MEM-20260908-registapiauth-widget-command-objectid] RegistApiAuth 위젯·command·objectid 연결 규칙 - memory/projects/registapiauth/widget-command-objectid-mapping.md | project: RegistApiAuth
+- [MEM-20260910-webui20-legacy-vue-migration-contracts] Legacy → Vue Migration Contract - memory/projects/webui20/legacy-to-vue-migration-contracts.md | project: WEBUI20
 - [MEM-20260910-webui20-project-contracts] WEBUI20 화면·라우팅·pageConfig 개발 계약 - memory/projects/webui20/project-architecture-and-development-contracts.md | project: WEBUI20
 
 ## Lessons
