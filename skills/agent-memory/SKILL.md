@@ -123,6 +123,20 @@ Normally skip Recall for trivial syntax questions, tiny conversions, isolated co
 10. Apply useful Memory as a reference.
 11. When actual execution depends on current implementation details, validate against the **current task's available source/config/tests** before changing code or making a factual claim about the present system.
 
+## Recall completion gate
+
+Reading this `SKILL.md`, loading the skill, or merely deciding that Recall would be useful does **not** complete Recall.
+
+When automatic Recall is triggered, substantive analysis/design/source exploration/modification should begin only after the retrieval preflight has actually run:
+
+1. Resolve the Memory repository when available.
+2. Derive discriminative project/technology/operation/mechanism terms from the current task.
+3. Search `INDEX.md` and, when necessary, Memory content.
+4. Read the smallest relevant Memory set when candidates exist.
+5. Only after an actual search returns no useful candidates may the Agent proceed as `no relevant memory found`.
+
+Do not claim or imply that Recall was used when only the skill instructions were read. Do not bypass retrieval merely because current source/docs are available, direct source exploration seems faster, or the task is urgent. If AI_MEMORY itself is unavailable, continue the task and treat Recall as unavailable rather than completed.
+
 ## Recall constraints
 
 - Never load the whole Memory repository merely for context.
