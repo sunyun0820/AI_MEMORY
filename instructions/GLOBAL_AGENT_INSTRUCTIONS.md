@@ -22,6 +22,18 @@ Do not require the user to invoke memory first. Skip automatic recall for trivia
 
 Use only relevant memories. Never load the entire memory repository into context.
 
+### Mandatory Recall preflight
+
+When Automatic Recall applies, **reading or loading `SKILL.md` alone does not count as Recall**. Before substantial analysis, design, decision-making, source exploration, or modification:
+
+1. Resolve `AI_MEMORY_HOME` if available.
+2. Identify the current project/repository, technology, operation, architecture/failure mechanism, and important constraints.
+3. Search `INDEX.md` and, when needed, Memory content for relevant project knowledge, lessons, incidents, and rules.
+4. If relevant candidates are found, actually read the smallest useful set before proceeding.
+5. If the search finds no relevant Memory, proceed with `no relevant memory found`; do not pretend Recall was completed without a search.
+
+Do not skip this preflight merely because current source/docs are available, the task appears urgent, or direct source exploration seems faster. If the shared Memory repository itself is unavailable, continue the user's task without inventing Memory and treat Recall as unavailable rather than completed.
+
 ## Manual learning only
 
 Do **not** write, update, promote, or archive shared memory automatically after completing a task.
