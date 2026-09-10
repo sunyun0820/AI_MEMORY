@@ -8,46 +8,47 @@
 
 ## Projects
 
+- [MEM-20260909-2nd-battery-integration-and-web-boundaries] 2nd-battery EIS·MCS·파일·로그인의 완료 경계 - memory/projects/2nd-battery/integration-and-web-boundaries.md | project: 2nd-battery
 - [MEM-20260909-2nd-battery-configuration-and-runtime] 2nd-battery 기동·패키징·설정과 웹 매핑 경계 - memory/projects/2nd-battery/configuration-and-runtime.md | project: 2nd-battery
 - [MEM-20260909-2nd-battery-project-architecture] 2nd-battery 모듈 소유권과 공정 Manager 위임 구조 - memory/projects/2nd-battery/project-architecture.md | project: 2nd-battery
 - [MEM-20260909-2nd-battery-source-navigation-map] 2nd-battery 업무별 소스 탐색 지도 - memory/projects/2nd-battery/source-navigation-map.md | project: 2nd-battery
 - [MEM-20260909-2nd-battery-persistence-and-query-patterns] 2nd-battery 저장·이력·Bulk와 활성 SQL provider 경계 - memory/projects/2nd-battery/persistence-and-query-patterns.md | project: 2nd-battery
 - [MEM-20260909-2nd-battery-runtime-and-business-flow] 2nd-battery 조회·저장·Track-In·BOM·품질 업무 흐름 - memory/projects/2nd-battery/runtime-and-business-flow.md | project: 2nd-battery
 - [MEM-20260909-2nd-battery-extension-patterns-and-invariants] 2nd-battery 확장 시 유지할 입력·상태·업무 불변조건 - memory/projects/2nd-battery/extension-patterns-and-invariants.md | project: 2nd-battery
-- [MEM-20260909-2nd-battery-integration-and-web-boundaries] 2nd-battery EIS·MCS·파일·로그인의 완료 경계 - memory/projects/2nd-battery/integration-and-web-boundaries.md | project: 2nd-battery
 - [MEM-20260908-ames-ai-harness] AMES THiRA MES 마이그레이션 AI 하네스의 역할과 파일 경계 - memory/projects/ames/ai-harness-orchestration-file-map.md | project: AMES
 - [MEM-20260908-155842] C-MOS 3.5.2 매뉴얼의 API·소비 프로젝트 계약 - memory/projects/cmos-frame/backend-manual-source-contracts-3.5.2.md | project: cmos-frame
+- [MEM-20260908-frame-architecture] C-MOS Framework 모듈 경계와 자동 탐색 계약 - memory/projects/cmos-frame/architecture.md | project: cmos-frame
+- [MEM-20260908-frame-nav] C-MOS Source Navigation Map - memory/projects/cmos-frame/source-navigation-map.md | project: cmos-frame
 - [MEM-20260909-frame-threadpool] C-MOS 스레드풀 상한·거부 처리·작업 종료의 경계 - memory/projects/cmos-frame/threadpool-and-concurrency-architecture.md | project: cmos-frame
 - [MEM-20260908-frame-tx] C-MOS 영속 계층과 트랜잭션 성공 판정의 경계 - memory/projects/cmos-frame/persistence-and-transaction.md | project: cmos-frame
 - [MEM-20260908-cmos-callback-contract] C-MOS 외부 JSON 콜백의 입력·응답·실행 경계 - memory/projects/cmos-frame/web-callback-input-response-contract.md | project: cmos-frame
 - [MEM-20260908-frame-lifecycle] C-MOS 초기화와 요청 수명주기 - memory/projects/cmos-frame/runtime-lifecycle.md | project: cmos-frame
 - [MEM-20260908-154901] C-MOS 컬럼 복호화 폴백과 이중 암호화 방어의 한계 - memory/projects/cmos-frame/crypto-column-fallback-and-double-encryption-prevention.md | project: cmos-frame
 - [MEM-20260908-frame-contracts] C-MOS 확장 계약과 엔티티·이력 경계 - memory/projects/cmos-frame/extension-contracts-and-invariants.md | project: cmos-frame
-- [MEM-20260908-frame-architecture] C-MOS Framework 모듈 경계와 자동 탐색 계약 - memory/projects/cmos-frame/architecture.md | project: cmos-frame
-- [MEM-20260908-frame-nav] C-MOS Source Navigation Map - memory/projects/cmos-frame/source-navigation-map.md | project: cmos-frame
 - [MEM-20260909-151501] C-MOS Jetty 정적 리소스와 민감 query 차단의 경계 - memory/projects/cmos-starter/jetty-handler-architecture-and-query-security.md | project: cmos-starter
 - [MEM-20260908-152802] eti LOTDEFECT의 API·Service·MaterialLot 수량 경계 - memory/projects/eti/lotdefect-qty-related-risks.md | project: eti
 - [MEM-20260908-hyosung-agv-boundaries] Hyosung AGV 예제의 모듈 배치와 검증 경계 - memory/projects/hyosung/agv-integration-boundaries.md | project: hyosung
 - [MEM-20260908-mescore-api-auth-runtime] mes-core API 권한 검사와 캐시 교체의 실행 경계 - memory/projects/mes-core/api-authorization-runtime-and-cache.md | project: mes-core
 - [MEM-20260908-registapiauth-widget-command-objectid] RegistApiAuth 위젯·command·objectid 연결 규칙 - memory/projects/registapiauth/widget-command-objectid-mapping.md | project: RegistApiAuth
+- [MEM-20260910-webui20-project-contracts] WEBUI20 화면·라우팅·pageConfig 개발 계약 - memory/projects/webui20/project-architecture-and-development-contracts.md | project: WEBUI20
 
 ## Lessons
 
+- [MEM-20260908-154902] Maven 타깃 버전 오류는 실제 Maven·컴파일러 JDK를 확인할 것 - memory/lessons/windows-mvn-compiler-target17-jdk-mismatch.md
 - [MEM-20260908-152801] 기존 행 재저장 시 파생 수량은 차분으로 맞출 것 - memory/lessons/paired-qty-update-must-use-delta.md
 - [MEM-20260908-refine-variant-contracts] 다중 구현 정합성 검사는 대상 목록과 비교 키부터 확정할 것 - memory/lessons/cross-variant-contract-validation-scope.md
 - [MEM-20260908-155843] 소스 기반 DOCX 매뉴얼은 API와 렌더링을 함께 검증할 것 - memory/lessons/source-grounded-docx-manual-validation.md
 - [MEM-20260908-refine-fallback-success] 실패를 숨기는 반환값을 성공 증거로 사용하지 말 것 - memory/lessons/fallback-result-is-not-success-proof.md
 - [MEM-20260910-refine-effect-boundaries] 요청 실패와 각 부수효과의 완료·복구 경계를 구분할 것 - memory/lessons/request-failure-does-not-rollback-all-effects.md
 - [MEM-20260910-refine-batch-scope] 첫 항목으로 처리 범위를 정하는 API는 목록 전체의 전제를 검증할 것 - memory/lessons/header-derived-batch-scope-validation.md
-- [MEM-20260908-154902] Maven 타깃 버전 오류는 실제 Maven·컴파일러 JDK를 확인할 것 - memory/lessons/windows-mvn-compiler-target17-jdk-mismatch.md
 - [MEM-20260909-151502] BSMES 로그인 폼의 query 노출 조치와 검증 범위 - memory/lessons/appscan-password-in-query-prevention.md | project: busan
-- [MEM-20260908-155201] 관계 전체 목록 동기화는 완전한 키로 차집합을 계산할 것 - memory/lessons/relation-data-sync-must-use-diff-bulk.md | project: mes-core
 - [MEM-20260908-api-auth-classification] API 권한 유형은 등록 계약으로 판정하고 batch 전체를 검사할 것 - memory/lessons/api-authorization-classification-and-batch.md | project: mes-core
 - [MEM-20260909-171501] mes-core 공개 로그인 경로의 제한적 토큰 검사와 호환 경계 - memory/lessons/jwt-alg-none-and-unsigned-token-blocking.md | project: mes-core
+- [MEM-20260908-155201] 관계 전체 목록 동기화는 완전한 키로 차집합을 계산할 것 - memory/lessons/relation-data-sync-must-use-diff-bulk.md | project: mes-core
 
 ## Incidents
 
 - [MEM-20260908-152800] LOTDEFECT DefectLot 재저장 시 Lot.Qty 이중 차감 - memory/incidents/eti-lotdefect-qty-double-deduct.md | project: eti
-- [MEM-20260908-155202] 다중 DBMS SQL 검증 범위를 직전 변경 파일로 축소한 실수 - memory/incidents/multi-db-sql-id-validation-scope-misinterpretation.md | project: mes-core
 - [MEM-20260908-mescore-api-auth-bootstrap] API 권한 캐시 초기화 중 Factory 의존성 오류 - memory/incidents/mes-core-api-auth-bootstrap-order.md | project: mes-core
+- [MEM-20260908-155202] 다중 DBMS SQL 검증 범위를 직전 변경 파일로 축소한 실수 - memory/incidents/multi-db-sql-id-validation-scope-misinterpretation.md | project: mes-core
 
