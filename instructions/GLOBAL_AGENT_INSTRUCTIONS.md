@@ -6,33 +6,15 @@ Use the `agent-memory` skill as shared long-term engineering memory.
 
 For non-trivial engineering work, automatically use `agent-memory` in **Recall** mode before substantial analysis, design, decision-making, or modification when past rules, project knowledge, lessons, incidents, or prior mistakes could materially help.
 
-Typical cases include:
+Skip trivial questions and tiny one-off operations where past engineering context is unlikely to help. Never load the whole memory repository for ordinary Recall.
 
-- system/source/problem analysis;
-- feature, API, architecture, data model, migration, or integration design;
-- technical trade-off and impact analysis;
-- coding, debugging, code review, and refactoring;
-- build/deployment failures;
-- database work;
-- security work;
-- changes to an existing codebase;
-- repeated or similar engineering work.
+### Recall completion and reuse
 
-Do not require the user to invoke memory first. Skip automatic recall for trivial questions or tiny one-off operations where past engineering context is unlikely to matter.
+For a new task, resolve the memory repository, batch discriminating project/mechanism terms in one search, and read the smallest useful set (usually 1-3 files initially, expanding only when necessary). Use the skill's full-content search helper or targeted INDEX/body searches. INDEX does not contain every body term: do not conclude no relevant memory from an inconclusive index-only search.
 
-Use only relevant memories. Never load the entire memory repository into context.
+Reading SKILL.md alone does not complete Recall. Complete retrieval before substantial work, or reuse a prior completed retrieval when the same task and applicable evidence remain in context. Progress questions and ordinary follow-ups do not restart the gate. Re-search the affected context when the project/mechanism/constraints change, conflicting evidence or relevant memory changes are observed, prior evidence is stale/unavailable, or the user asks for a fresh check. Do not run filesystem checks on every turn solely to reuse context.
 
-### Mandatory Recall preflight
-
-When Automatic Recall applies, **reading or loading `SKILL.md` alone does not count as Recall**. Before substantial analysis, design, decision-making, source exploration, or modification:
-
-1. Resolve `AI_MEMORY_HOME` if available.
-2. Identify the current project/repository, technology, operation, architecture/failure mechanism, and important constraints.
-3. Search `INDEX.md` and, when needed, Memory content for relevant project knowledge, lessons, incidents, and rules.
-4. If relevant candidates are found, actually read the smallest useful set before proceeding.
-5. If the search finds no relevant Memory, proceed with `no relevant memory found`; do not pretend Recall was completed without a search.
-
-Do not skip this preflight merely because current source/docs are available, the task appears urgent, or direct source exploration seems faster. If the shared Memory repository itself is unavailable, continue the user's task without inventing Memory and treat Recall as unavailable rather than completed.
+An actual search with no useful result may be reused under the same conditions. If the repository is unavailable, continue the user's task and treat Recall as unavailable. Do not invent retrieved knowledge or claim reused facts were freshly verified. Detailed retrieval and write-mode rules live in the agent-memory skill.
 
 ## Manual learning only
 

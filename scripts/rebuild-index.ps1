@@ -21,7 +21,7 @@ function Get-MetaValue {
         [Parameter(Mandatory = $true)][string]$Key
     )
 
-    $match = [regex]::Match($Text, "(?m)^$([regex]::Escape($Key)):\s*(.+)$")
+    $match = [regex]::Match($Text, "(?m)^$([regex]::Escape($Key)):[ \t]*([^\r\n]*)")
     if ($match.Success) { return $match.Groups[1].Value.Trim().Trim('"').Trim("'") }
     return ""
 }
@@ -36,17 +36,22 @@ function Get-RelativeRepositoryPath {
 
 $rows = @()
 Get-ChildItem -Path $memoryRoot -Recurse -File -Filter "*.md" | ForEach-Object {
+    $relativePath = Get-RelativeRepositoryPath $_.FullName
+    if ($relativePath -like 'memory/archive/*') { return }
     $text = Get-Content $_.FullName -Raw -Encoding UTF8
+    $metadata = [regex]::Match($text, '\A---\r?\n(.*?)\r?\n---(?:\r?\n|\z)', 'Singleline').Groups[1].Value
     $titleMatch = [regex]::Match($text, "(?m)^#\s+(.+)$")
     $title = if ($titleMatch.Success) { $titleMatch.Groups[1].Value.Trim() } else { $_.BaseName }
 
     $rows += [PSCustomObject]@{
-        Type = Get-MetaValue $text "type"
-        Status = Get-MetaValue $text "status"
-        Project = Get-MetaValue $text "project"
-        Id = Get-MetaValue $text "id"
+        Type = Get-MetaValue $metadata "type"
+        Status = Get-MetaValue $metadata "status"
+        Project = Get-MetaValue $metadata "project"
+        Id = Get-MetaValue $metadata "id"
+        Domain = Get-MetaValue $metadata "domain"
+        Tags = Get-MetaValue $metadata "tags"
         Title = $title
-        Path = Get-RelativeRepositoryPath $_.FullName
+        Path = $relativePath
     }
 }
 
@@ -74,7 +79,9 @@ foreach ($section in @("rule", "project", "lesson", "incident")) {
     else {
         foreach ($item in $items) {
             $extra = if ($item.Project) { " | project: $($item.Project)" } else { "" }
-            [void]$builder.AppendLine(("- [{0}] {1} - `{2}`{3}" -f $item.Id, $item.Title, $item.Path, $extra))
+            if ($item.Domain) { $extra += " | domain: $($item.Domain)" }
+            if ($item.Tags) { $extra += " | tags: $($item.Tags)" }
+            [void]$builder.AppendLine(('- [{0}] {1} - `{2}`{3}' -f $item.Id, $item.Title, $item.Path, $extra))
         }
     }
     [void]$builder.AppendLine("")

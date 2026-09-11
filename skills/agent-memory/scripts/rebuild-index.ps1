@@ -1,3 +1,4 @@
-$root = $env:AI_MEMORY_HOME
-if ([string]::IsNullOrWhiteSpace($root)) { $root = 'E:\AI_MEMORY' }
-& (Join-Path $root 'scripts\rebuild-index.ps1') -Root $root
+param([string]$Root = $env:AI_MEMORY_HOME)
+$ErrorActionPreference = 'Stop'
+$Root = & (Join-Path $PSScriptRoot 'resolve-root.ps1') -Root $Root
+& (Join-Path $Root 'scripts/rebuild-index.ps1') -Root $Root

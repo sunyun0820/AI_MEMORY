@@ -80,6 +80,27 @@ Recall은 이름이 같은 Memory만 찾지 않습니다. `operation`, `state tr
 
 Recall된 Memory는 사전 검토 자료입니다. 실제 구현 세부를 판단할 때는 현재 작업의 코드/설정/테스트를 확인합니다.
 
+
+### 반복 조회를 줄이는 사용법
+
+같은 작업의 완료된 Recall 결과가 대화에 남아 있으면 재사용합니다. 진행 상황 질문이나 같은 결과의 후속 설명 때문에 다시 검색하지 않습니다. 프로젝트·실패 메커니즘·제약 변경, 상충 근거, 관련 Memory 변경, 오래되거나 사라진 근거, 새 확인 요청이 있을 때 필요한 부분만 재조회합니다.
+
+처음에는 검색어를 묶어 조회하고 관련 파일 1~3개부터 읽습니다. 부족할 때 추가로 읽으며, 개수를 채우기 위해 파일을 열지 않습니다. 일반 Recall에서는 쓰기 모드 참조 문서나 setup/doctor를 읽거나 실행하지 않습니다.
+
+```powershell
+# AI_MEMORY 루트에서 실행
+.\scripts\search-memory.ps1 -Query '2nd-battery','RuleMultiInquiry' -Project '2nd-battery'
+.\scripts\search-memory.ps1 -Query 'transaction','rollback' -MaxFiles 8 -AsObject
+```
+
+- 검색어는 대소문자를 구분하지 않는 리터럴 OR 조건입니다.
+- 정확한 ID, 지정 프로젝트/공용 범위, 서로 다른 검색어 충족 수, 메타데이터 일치, 상한을 둔 행 일치 수 순으로 정렬합니다. `-Project`는 우선순위이며 다른 프로젝트의 교훈을 제외하는 필터가 아닙니다.
+- 기본 결과 수는 5개입니다. 필요할 때 `-MaxFiles`로 확장합니다. 기본 텍스트 출력은 파일별 2줄이며 샘플은 360자까지 표시합니다. `-AsObject`는 전체 Samples와 Path/Id/MatchedTerms 등을 반환합니다. 기존 표시용 Format-Table 객체 대신 명시적인 구조화 결과를 사용합니다.
+- 보관 경로와 `status: archived`는 기본 제외합니다. 이력 조회에만 `-IncludeArchived`를 사용합니다.
+- INDEX는 tags/domain을 포함하지만 본문의 모든 API를 담지는 않습니다. 인덱스만 검색해 찾지 못하면 본문 검색으로 확인합니다.
+- 환경변수가 없는 canonical/junction 설치는 보조 스크립트의 설치 경로에서 루트를 찾습니다. 복사본은 `AI_MEMORY_HOME` 또는 `-Root`로 루트를 지정합니다.
+
+검증: `scripts/test-memory-retrieval.ps1`은 격리된 임시 메모리와 현재 저장소 ID로 검색·정렬·보관 제외·인덱스 생성을 검사합니다. 실제 메모리 본문은 변경하지 않습니다.
 ## Backfill
 
 ```text
